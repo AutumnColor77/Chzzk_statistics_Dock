@@ -179,13 +179,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const targetItem = document.getElementById(toggle.dataset.target);
         if (!targetItem) return;
         
+        // Load saved state for each toggle
         const savedState = localStorage.getItem(`toggle-${toggle.dataset.target}`);
-        toggle.checked = savedState ? JSON.parse(savedState) : true; // Default to true if not saved
+        // Default to true (visible) if no saved state exists
+        toggle.checked = savedState ? JSON.parse(savedState) : true; 
         targetItem.classList.toggle('hidden', !toggle.checked);
 
+        // When checkbox is changed, update visibility and save state
         toggle.addEventListener('change', (event) => {
             targetItem.classList.toggle('hidden', !event.target.checked);
             localStorage.setItem(`toggle-${toggle.dataset.target}`, event.target.checked);
+        });
+    });
+
+    // Add click-to-toggle functionality to the stat items themselves
+    document.querySelectorAll('.stat-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const correspondingToggle = document.querySelector(`input[data-target="${item.id}"]`);
+            if (correspondingToggle) {
+                // Programmatically click the checkbox to trigger its change event
+                correspondingToggle.click();
+            }
         });
     });
 

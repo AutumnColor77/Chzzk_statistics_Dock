@@ -20,9 +20,10 @@ body {
 
 #stats-container {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr; /* Two columns */
     gap: 8px;
     margin-bottom: 15px;
+    margin-top: 25px; /* Add space for the gear icon */
 }
 
 .stat-item {
@@ -32,6 +33,9 @@ body {
     background-color: #363636;
     padding: 8px 12px;
     border-radius: 4px;
+    cursor: pointer; /* Indicate items are clickable */
+    -webkit-user-select: none; /* Disable text selection */
+    user-select: none;
 }
 
 .stat-item .label {
