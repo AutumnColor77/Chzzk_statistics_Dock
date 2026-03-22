@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (fetchInterval) clearInterval(fetchInterval);
         if (state.channelId) {
             fetchChzzkData();
-            fetchInterval = setInterval(fetchChzzkData, 15000);
+            fetchInterval = setInterval(fetchChzzkData, 30000);
         }
     }
 
