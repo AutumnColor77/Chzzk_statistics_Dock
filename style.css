@@ -6,7 +6,7 @@ body {
     padding: 10px;
     font-size: 14px;
     position: relative;
-    text-align: center; /* Center align all content */
+    /* text-align: center; Removed */
 }
 
 #stats-container {
@@ -39,14 +39,23 @@ body {
 
 #settings-container {
     margin-top: 10px;
+    text-align: left; /* Align button and panel to the left */
 }
 
 #settings-toggle-button {
     cursor: pointer;
-    font-size: 20px;
-    display: inline-block; /* Make it part of the flow */
+    font-size: 13px; /* Adjusted for text */
+    display: inline-block;
     margin-bottom: 10px;
+    background-color: #4a4a4a;
+    border: 1px solid #666;
+    padding: 4px 10px;
+    border-radius: 3px;
 }
+#settings-toggle-button:hover {
+    background-color: #5a5a5a;
+}
+
 
 #settings-panel {
     display: none; /* Hidden by default */

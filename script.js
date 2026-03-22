@@ -108,8 +108,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- UI and Event Listeners ---
+    function updateSettingsButtonText() {
+        const isVisible = settingsPanel.classList.contains('visible');
+        settingsToggleButton.textContent = isVisible ? '설정 접기' : '설정 열기';
+    }
+
     function setupInitialUI(hasChannelId) {
-        // Stats are always visible. Settings panel starts hidden if ID is present.
         statsContainer.style.display = 'grid';
         settingsToggleButton.style.display = 'block';
 
@@ -118,10 +122,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             settingsPanel.classList.add('visible');
         }
+        updateSettingsButtonText();
     }
     
     settingsToggleButton.addEventListener('click', () => {
         settingsPanel.classList.toggle('visible');
+        updateSettingsButtonText();
     });
 
     function saveChannelId() {
@@ -139,6 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (newId) {
             state.channelId = newId;
+            localStorage.setItem('chzzkChannelId', newId); // Save the channel ID
             state.viewerHistory = [];
             setupInitialUI(true);
             startFetching();
@@ -152,8 +159,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initialization ---
     function initialize() {
-        setupInitialUI(false);
-        updateUi(); // Show "ID 없음" message initially
+        const savedId = localStorage.getItem('chzzkChannelId');
+        if (savedId) {
+            state.channelId = savedId;
+            channelIdInput.value = savedId; // Pre-fill the input field
+            setupInitialUI(true);
+            startFetching();
+        } else {
+            setupInitialUI(false);
+            updateUi(); // Show "ID 없음" message initially
+        }
     }
 
     initialize();
