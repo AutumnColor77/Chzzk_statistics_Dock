@@ -5,6 +5,17 @@ body {
     margin: 0;
     padding: 10px;
     font-size: 14px;
+    position: relative;
+}
+
+#settings-toggle-button {
+    position: absolute;
+    top: 5px;
+    right: 10px;
+    cursor: pointer;
+    font-size: 20px;
+    z-index: 100;
+    display: none; /* Initially hidden, shown by JS if ID is set */
 }
 
 #stats-container {
@@ -35,9 +46,13 @@ body {
 #settings-panel {
     border-top: 1px solid #444;
     padding-top: 10px;
-    display: flex;
+    display: none; /* Hidden by default */
     flex-direction: column;
     gap: 10px;
+}
+
+#settings-panel.visible {
+    display: flex;
 }
 
 .settings-group {

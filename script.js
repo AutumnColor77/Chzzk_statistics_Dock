@@ -1,5 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Elements ---
+    const settingsPanel = document.getElementById('settings-panel');
+    const statsContainer = document.getElementById('stats-container');
+    const settingsToggleButton = document.getElementById('settings-toggle-button');
+    
     const colorPicker = document.getElementById('value-color-picker');
     const valueElements = document.querySelectorAll('.value');
     const channelIdInput = document.getElementById('channel-id-input');
@@ -21,6 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
         subscribers: 0,
         donations: 0
     };
+    
+    let fetchInterval = null;
 
     // --- Core Functions ---
     async function fetchChzzkData() {
@@ -49,13 +55,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.peakViewers = content.accumulateCount || 0;
                     state.followers = content.followerCount || 0;
                     
-                    // Add to history for average calculation
                     state.viewerHistory.push(state.concurrentViewers);
                     if (state.viewerHistory.length > MAX_HISTORY_LENGTH) {
-                        state.viewerHistory.shift(); // Remove the oldest entry
+                        state.viewerHistory.shift();
                     }
                 } else {
-                    // Stream is closed, keep follower count but reset live stats
                     state.concurrentViewers = 0;
                     state.peakViewers = 0;
                     state.followers = content.followerCount || state.followers;
@@ -69,7 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
             state.liveStatus = 'CLOSE';
         }
         
-        // Handle status change from OPEN to CLOSE
         if (previousStatus === 'OPEN' && state.liveStatus === 'CLOSE') {
             state.viewerHistory = [];
             state.averageViewers = 0;
@@ -89,6 +92,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateUi() {
+        if (statsContainer.style.display === 'none') {
+            statsContainer.style.display = 'grid'; // Show stats after first successful fetch
+        }
+
         if (state.liveStatus === 'OPEN') {
             document.getElementById('concurrent-viewers').textContent = state.concurrentViewers.toLocaleString();
             document.getElementById('peak-viewers').textContent = state.peakViewers.toLocaleString();
@@ -98,9 +105,8 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('peak-viewers').textContent = '오프라인';
             document.getElementById('average-viewers').textContent = '오프라인';
         }
-        document.getElementById('followers').textContent = state.followers.toLocaleString();
+        document.getElementById('followers').textContent = state.followers > 0 ? state.followers.toLocaleString() : '-';
 
-        // Update fields not provided by API
         document.getElementById('chat-participants').textContent = 'N/A';
         document.getElementById('subscribers').textContent = 'N/A';
         document.getElementById('donations').textContent = 'N/A';
@@ -111,25 +117,46 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('concurrent-viewers').textContent = message;
         document.getElementById('peak-viewers').textContent = message;
         document.getElementById('average-viewers').textContent = message;
-        document.getElementById('followers').textContent = state.followers > 0 ? state.followers.toLocaleString() : '-';
+        document.getElementById('followers').textContent = '-';
     }
 
-
-    // --- Settings and Event Listeners ---
-    function applyColor(color) {
-        valueElements.forEach(el => {
-            el.style.color = color;
-        });
+    function startFetching() {
+        if (fetchInterval) {
+            clearInterval(fetchInterval);
+        }
+        if (state.channelId) {
+            fetchChzzkData();
+            fetchInterval = setInterval(fetchChzzkData, 15000);
+        }
     }
+
+    // --- UI and Event Listeners ---
+    function setupInitialUI(hasChannelId) {
+        if (hasChannelId) {
+            statsContainer.style.display = 'grid';
+            settingsPanel.classList.remove('visible');
+            settingsToggleButton.style.display = 'block';
+        } else {
+            statsContainer.style.display = 'none';
+            settingsPanel.classList.add('visible');
+            settingsToggleButton.style.display = 'none';
+        }
+    }
+    
+    settingsToggleButton.addEventListener('click', () => {
+        settingsPanel.classList.toggle('visible');
+    });
 
     function saveChannelId() {
         const newId = channelIdInput.value.trim();
         if (newId) {
             state.channelId = newId;
             localStorage.setItem('chzzkChannelId', newId);
-            state.viewerHistory = []; // Reset history on ID change
+            state.viewerHistory = [];
             console.log(`Channel ID saved: ${newId}`);
-            fetchChzzkData(); // Fetch immediately on save
+            
+            setupInitialUI(true); // Switch to viewer mode
+            startFetching(); // Start fetching data
         }
     }
 
@@ -142,55 +169,59 @@ document.addEventListener('DOMContentLoaded', () => {
 
     colorPicker.addEventListener('input', (event) => {
         const newColor = event.target.value;
-        applyColor(newColor);
+        document.querySelectorAll('.value').forEach(el => {
+            el.style.color = newColor;
+        });
         localStorage.setItem('valueColor', newColor);
     });
 
     toggles.forEach(toggle => {
         const targetItem = document.getElementById(toggle.dataset.target);
         if (!targetItem) return;
+        
+        const savedState = localStorage.getItem(`toggle-${toggle.dataset.target}`);
+        toggle.checked = savedState ? JSON.parse(savedState) : true; // Default to true if not saved
         targetItem.classList.toggle('hidden', !toggle.checked);
+
         toggle.addEventListener('change', (event) => {
             targetItem.classList.toggle('hidden', !event.target.checked);
+            localStorage.setItem(`toggle-${toggle.dataset.target}`, event.target.checked);
         });
     });
 
-    function configureStatsVisibility() {
-        // Hide only the stats that are truly unsupported
+    function configureUnsupportedStats() {
         const unsupported = ['chat-participants-item', 'subscribers-item', 'donations-item'];
         unsupported.forEach(id => {
             document.getElementById(id)?.classList.add('hidden');
             const toggle = document.querySelector(`input[data-target="${id}"]`);
-            if (toggle) toggle.checked = false;
+            if (toggle) {
+                toggle.checked = false;
+                toggle.parentElement.classList.add('hidden'); // Hide the toggle itself
+            }
         });
-
-        // Ensure 'average-viewers-item' is visible by default
-        const avgToggle = document.querySelector('input[data-target="average-viewers-item"]');
-        if(avgToggle && !avgToggle.checked) {
-            // This logic is tricky because of user settings. Let's just default it to checked in HTML.
-            // For now, we will just make sure it is not hidden by this function.
-        }
     }
 
     // --- Initialization ---
     function initialize() {
         const savedId = localStorage.getItem('chzzkChannelId');
-        const defaultId = 'b26947470f4361083ac58fc2f822d517';
-        state.channelId = savedId || defaultId;
-        channelIdInput.value = state.channelId;
+        state.channelId = savedId;
+        
+        setupInitialUI(!!savedId);
+
+        if(savedId) {
+            channelIdInput.value = savedId;
+            startFetching();
+        }
 
         const savedColor = localStorage.getItem('valueColor');
         if (savedColor) {
             colorPicker.value = savedColor;
-            applyColor(savedColor);
-        } else {
-            applyColor(colorPicker.value);
+             document.querySelectorAll('.value').forEach(el => {
+                el.style.color = savedColor;
+            });
         }
-
-        configureStatsVisibility();
-
-        fetchChzzkData();
-        setInterval(fetchChzzkData, 15000); // Update every 15 seconds
+        
+        configureUnsupportedStats();
     }
 
     initialize();
