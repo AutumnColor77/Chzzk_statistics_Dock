@@ -95,7 +95,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const valueEl = item.querySelector('.value');
             const itemId = item.id;
             const key = itemId.replace('-item', '');
-            valueEl.textContent = items[key];
+
+            if (item.classList.contains('value-hidden')) {
+                valueEl.textContent = '가려짐';
+            } else {
+                valueEl.textContent = items[key];
+            }
         });
     }
 
@@ -169,6 +174,23 @@ document.addEventListener('DOMContentLoaded', () => {
             setupInitialUI(false);
             updateUi(); // Show "ID 없음" message initially
         }
+        
+        // Add back the click-to-hide functionality
+        statItems.forEach(item => {
+            const storageKey = `value-hidden-${item.id}`;
+            const isHidden = localStorage.getItem(storageKey) === 'true';
+            
+            item.classList.toggle('value-hidden', isHidden);
+
+            item.addEventListener('click', () => {
+                const shouldHide = !item.classList.contains('value-hidden');
+                item.classList.toggle('value-hidden', shouldHide);
+                localStorage.setItem(storageKey, shouldHide);
+                updateUi(); // Re-render to show "가려짐" or the value
+            });
+        });
+
+        updateUi(); // Call once after setting initial hidden states
     }
 
     initialize();
