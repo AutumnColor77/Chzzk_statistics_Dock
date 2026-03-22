@@ -1,0 +1,112 @@
+body {
+    background-color: #2A2A2A;
+    color: #EFEFEF;
+    font-family: 'Malgun Gothic', sans-serif;
+    margin: 0;
+    padding: 10px;
+    font-size: 14px;
+}
+
+#stats-container {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #363636;
+    padding: 8px 12px;
+    border-radius: 4px;
+}
+
+.stat-item .label {
+    font-weight: bold;
+}
+
+.stat-item .value {
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 16px;
+}
+
+#settings-panel {
+    border-top: 1px solid #444;
+    padding-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.settings-group {
+    background-color: #333;
+    border-radius: 4px;
+    padding: 8px;
+    border: 1px solid #444;
+}
+
+.setting-item, .setting-toggle {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+    padding: 4px;
+}
+
+.setting-toggle:last-child, .setting-item:last-child {
+    margin-bottom: 0;
+}
+
+#channel-id-input {
+    flex-grow: 1;
+    margin: 0 8px;
+    background-color: #2A2A2A;
+    border: 1px solid #555;
+    color: #EFEFEF;
+    padding: 4px 6px;
+    border-radius: 3px;
+}
+
+#save-channel-id {
+    background-color: #4a4a4a;
+    color: #EFEFEF;
+    border: 1px solid #666;
+    padding: 4px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+#save-channel-id:hover {
+    background-color: #5a5a5a;
+}
+
+#value-color-picker {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 40px;
+    height: 25px;
+    background-color: transparent;
+    border: 1px solid #555;
+    cursor: pointer;
+    padding: 0;
+}
+#value-color-picker::-webkit-color-swatch {
+    border-radius: 3px;
+    border: none;
+}
+#value-color-picker::-moz-color-swatch {
+    border-radius: 3px;
+    border: none;
+}
+
+.setting-toggle label {
+    cursor: pointer;
+    flex-grow: 1;
+}
+
+.hidden {
+    display: none;
+}

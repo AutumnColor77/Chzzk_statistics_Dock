@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chzzk Viewer Dock</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="stats-container">
+        <div class="stat-item" id="concurrent-viewers-item">
+            <span class="label">동시 시청자</span>
+            <span class="value" id="concurrent-viewers">0</span>
+        </div>
+        <div class="stat-item" id="peak-viewers-item">
+            <span class="label">최고 시청자</span>
+            <span class="value" id="peak-viewers">0</span>
+        </div>
+        <div class="stat-item" id="average-viewers-item">
+            <span class="label">평균 시청자</span>
+            <span class="value" id="average-viewers">0</span>
+        </div>
+        <div class="stat-item" id="chat-participants-item">
+            <span class="label">채팅 참여자</span>
+            <span class="value" id="chat-participants">0</span>
+        </div>
+        <div class="stat-item" id="followers-item">
+            <span class="label">팔로워</span>
+            <span class="value" id="followers">0</span>
+        </div>
+        <div class="stat-item" id="subscribers-item">
+            <span class="label">구독자</span>
+            <span class="value" id="subscribers">0</span>
+        </div>
+        <div class="stat-item" id="donations-item">
+            <span class="label">후원</span>
+            <span class="value" id="donations">0</span>
+        </div>
+    </div>
+
+    <div id="settings-panel">
+        <div class="settings-group">
+            <div class="setting-item">
+                <label for="channel-id-input">채널 ID</label>
+                <input type="text" id="channel-id-input" placeholder="채널 ID를 입력하세요">
+                <button id="save-channel-id">저장</button>
+            </div>
+        </div>
+        <div class="settings-group">
+            <div class="setting-toggle">
+                <label for="value-color-picker">값 색상</label>
+                <input type="color" id="value-color-picker" value="#4CAF50">
+            </div>
+        </div>
+        <div class="settings-group">
+            <div class="setting-toggle">
+                <label for="toggle-concurrent-viewers">동시 시청자</label>
+                <input type="checkbox" id="toggle-concurrent-viewers" data-target="concurrent-viewers-item" checked>
+            </div>
+            <div class="setting-toggle">
+                <label for="toggle-peak-viewers">최고 시청자</label>
+                <input type="checkbox" id="toggle-peak-viewers" data-target="peak-viewers-item" checked>
+            </div>
+            <div class="setting-toggle">
+                <label for="toggle-average-viewers">평균 시청자</label>
+                <input type="checkbox" id="toggle-average-viewers" data-target="average-viewers-item" checked>
+            </div>
+            <div class="setting-toggle">
+                <label for="toggle-chat-participants">채팅 참여자</label>
+                <input type="checkbox" id="toggle-chat-participants" data-target="chat-participants-item" checked>
+            </div>
+            <div class="setting-toggle">
+                <label for="toggle-followers">팔로워</label>
+                <input type="checkbox" id="toggle-followers" data-target="followers-item" checked>
+            </div>
+            <div class="setting-toggle">
+                <label for="toggle-subscribers">구독자</label>
+                <input type="checkbox" id="toggle-subscribers" data-target="subscribers-item" checked>
+            </div>
+            <div class="setting-toggle">
+                <label for="toggle-donations">후원</label>
+                <input type="checkbox" id="toggle-donations" data-target="donations-item" checked>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
