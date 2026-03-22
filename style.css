@@ -126,6 +126,10 @@ body {
     flex-grow: 1;
 }
 
-.hidden {
-    display: none;
+.stat-item.value-hidden {
+    opacity: 0.7;
+}
+
+.stat-item.value-hidden .value {
+    color: #888 !important; /* Use important to override custom color picker color */
 }

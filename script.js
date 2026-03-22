@@ -5,25 +5,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const settingsToggleButton = document.getElementById('settings-toggle-button');
     
     const colorPicker = document.getElementById('value-color-picker');
-    const valueElements = document.querySelectorAll('.value');
     const channelIdInput = document.getElementById('channel-id-input');
     const saveButton = document.getElementById('save-channel-id');
     const toggles = document.querySelectorAll('.settings-group input[type="checkbox"]');
+    const statItems = document.querySelectorAll('.stat-item');
 
     // --- State Management ---
-    const MAX_HISTORY_LENGTH = 120; // Approx 30 minutes of data (120 samples * 15s interval)
+    const MAX_HISTORY_LENGTH = 120;
     const state = {
         channelId: null,
-        liveStatus: 'CLOSE', // CLOSE, OPEN
+        liveStatus: 'CLOSE',
         concurrentViewers: 0,
         peakViewers: 0,
         followers: 0,
         averageViewers: 0,
         viewerHistory: [],
-        // --- Not provided by this API ---
-        chatParticipants: 0,
-        subscribers: 0,
-        donations: 0
     };
     
     let fetchInterval = null;
@@ -31,8 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Core Functions ---
     async function fetchChzzkData() {
         if (!state.channelId) {
-            console.warn("Chzzk channel ID is not set.");
-            updateUiForOfflineState("ID 없음");
+            updateUi(); // Call updateUi to show "ID 없음"
             return;
         }
 
@@ -45,16 +40,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const data = await response.json();
-
             if (data.code === 200) {
                 const content = data.content || {};
                 state.liveStatus = content.status || 'CLOSE';
-
                 if (state.liveStatus === 'OPEN') {
                     state.concurrentViewers = content.concurrentUserCount || 0;
                     state.peakViewers = content.accumulateCount || 0;
                     state.followers = content.followerCount || 0;
-                    
                     state.viewerHistory.push(state.concurrentViewers);
                     if (state.viewerHistory.length > MAX_HISTORY_LENGTH) {
                         state.viewerHistory.shift();
@@ -65,11 +57,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.followers = content.followerCount || state.followers;
                 }
             } else {
-                console.error("Chzzk API error:", data.message);
                 state.liveStatus = 'CLOSE';
             }
         } catch (error) {
-            console.error("Failed to fetch Chzzk data:", error);
             state.liveStatus = 'CLOSE';
         }
         
@@ -93,37 +83,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateUi() {
         if (statsContainer.style.display === 'none') {
-            statsContainer.style.display = 'grid'; // Show stats after first successful fetch
+            statsContainer.style.display = 'grid';
         }
 
-        if (state.liveStatus === 'OPEN') {
-            document.getElementById('concurrent-viewers').textContent = state.concurrentViewers.toLocaleString();
-            document.getElementById('peak-viewers').textContent = state.peakViewers.toLocaleString();
-            document.getElementById('average-viewers').textContent = state.averageViewers.toLocaleString();
-        } else {
-            document.getElementById('concurrent-viewers').textContent = '오프라인';
-            document.getElementById('peak-viewers').textContent = '오프라인';
-            document.getElementById('average-viewers').textContent = '오프라인';
-        }
-        document.getElementById('followers').textContent = state.followers > 0 ? state.followers.toLocaleString() : '-';
+        const items = {
+            'concurrent-viewers': state.liveStatus === 'OPEN' ? state.concurrentViewers.toLocaleString() : '오프라인',
+            'peak-viewers': state.liveStatus === 'OPEN' ? state.peakViewers.toLocaleString() : '오프라인',
+            'average-viewers': state.liveStatus === 'OPEN' ? state.averageViewers.toLocaleString() : '오프라인',
+            'followers': state.followers > 0 ? state.followers.toLocaleString() : (state.liveStatus === 'CLOSE' ? '오프라인' : '0'),
+        };
 
-        document.getElementById('chat-participants').textContent = 'N/A';
-        document.getElementById('subscribers').textContent = 'N/A';
-        document.getElementById('donations').textContent = 'N/A';
-    }
-    
-    function updateUiForOfflineState(message) {
-        state.liveStatus = 'CLOSE';
-        document.getElementById('concurrent-viewers').textContent = message;
-        document.getElementById('peak-viewers').textContent = message;
-        document.getElementById('average-viewers').textContent = message;
-        document.getElementById('followers').textContent = '-';
+        if (!state.channelId) {
+             Object.keys(items).forEach(key => items[key] = 'ID 없음');
+        }
+
+        statItems.forEach(item => {
+            const valueEl = item.querySelector('.value');
+            const itemId = item.id;
+            const key = itemId.replace('-item', '');
+
+            if (item.classList.contains('value-hidden')) {
+                valueEl.textContent = '가려짐';
+            } else {
+                valueEl.textContent = items[key];
+            }
+        });
     }
 
     function startFetching() {
-        if (fetchInterval) {
-            clearInterval(fetchInterval);
-        }
+        if (fetchInterval) clearInterval(fetchInterval);
         if (state.channelId) {
             fetchChzzkData();
             fetchInterval = setInterval(fetchChzzkData, 15000);
@@ -153,18 +141,14 @@ document.addEventListener('DOMContentLoaded', () => {
             state.channelId = newId;
             localStorage.setItem('chzzkChannelId', newId);
             state.viewerHistory = [];
-            console.log(`Channel ID saved: ${newId}`);
-            
-            setupInitialUI(true); // Switch to viewer mode
-            startFetching(); // Start fetching data
+            setupInitialUI(true);
+            startFetching();
         }
     }
 
     saveButton.addEventListener('click', saveChannelId);
     channelIdInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            saveChannelId();
-        }
+        if (e.key === 'Enter') saveChannelId();
     });
 
     colorPicker.addEventListener('input', (event) => {
@@ -174,46 +158,35 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         localStorage.setItem('valueColor', newColor);
     });
-
+    
+    // Setup for all toggles (checkboxes and clickable stat items)
     toggles.forEach(toggle => {
-        const targetItem = document.getElementById(toggle.dataset.target);
+        const targetId = toggle.dataset.target;
+        const targetItem = document.getElementById(targetId);
         if (!targetItem) return;
         
-        // Load saved state for each toggle
-        const savedState = localStorage.getItem(`toggle-${toggle.dataset.target}`);
-        // Default to true (visible) if no saved state exists
-        toggle.checked = savedState ? JSON.parse(savedState) : true; 
-        targetItem.classList.toggle('hidden', !toggle.checked);
+        const storageKey = `value-hidden-${targetId}`;
+        
+        // Load saved state
+        const isHidden = localStorage.getItem(storageKey) === 'true';
+        toggle.checked = !isHidden;
+        targetItem.classList.toggle('value-hidden', isHidden);
 
-        // When checkbox is changed, update visibility and save state
+        // When checkbox is changed, update state
         toggle.addEventListener('change', (event) => {
-            targetItem.classList.toggle('hidden', !event.target.checked);
-            localStorage.setItem(`toggle-${toggle.dataset.target}`, event.target.checked);
+            const shouldHide = !event.target.checked;
+            targetItem.classList.toggle('value-hidden', shouldHide);
+            localStorage.setItem(storageKey, shouldHide);
+            updateUi(); // Re-render UI to show "가려짐" or the value
         });
     });
 
-    // Add click-to-toggle functionality to the stat items themselves
-    document.querySelectorAll('.stat-item').forEach(item => {
+    statItems.forEach(item => {
         item.addEventListener('click', () => {
             const correspondingToggle = document.querySelector(`input[data-target="${item.id}"]`);
-            if (correspondingToggle) {
-                // Programmatically click the checkbox to trigger its change event
-                correspondingToggle.click();
-            }
+            if (correspondingToggle) correspondingToggle.click();
         });
     });
-
-    function configureUnsupportedStats() {
-        const unsupported = ['chat-participants-item', 'subscribers-item', 'donations-item'];
-        unsupported.forEach(id => {
-            document.getElementById(id)?.classList.add('hidden');
-            const toggle = document.querySelector(`input[data-target="${id}"]`);
-            if (toggle) {
-                toggle.checked = false;
-                toggle.parentElement.classList.add('hidden'); // Hide the toggle itself
-            }
-        });
-    }
 
     // --- Initialization ---
     function initialize() {
@@ -225,17 +198,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if(savedId) {
             channelIdInput.value = savedId;
             startFetching();
+        } else {
+            updateUi(); // Show "ID 없음" message
         }
 
         const savedColor = localStorage.getItem('valueColor');
         if (savedColor) {
             colorPicker.value = savedColor;
-             document.querySelectorAll('.value').forEach(el => {
+             document.querySelectorAll('.value:not(.value-hidden .value)').forEach(el => {
                 el.style.color = savedColor;
             });
         }
-        
-        configureUnsupportedStats();
     }
 
     initialize();
