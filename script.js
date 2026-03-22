@@ -30,17 +30,15 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const apiUrl = `https://api.chzzk.naver.com/polling/v2/channels/${state.channelId}/live-status`;
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
+        const url = `https://corsproxy.io/?https://api.chzzk.naver.com/polling/v2/channels/${state.channelId}/live-status`;
         const previousStatus = state.liveStatus;
 
         try {
-            const response = await fetch(proxyUrl);
+            const response = await fetch(url);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            const outerData = await response.json();
-            const data = JSON.parse(outerData.contents); // The actual API response is in the 'contents' field
+            const data = await response.json();
 
             if (data.code === 200) {
                 const content = data.content || {};
@@ -60,7 +58,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Stream is closed, keep follower count but reset live stats
                     state.concurrentViewers = 0;
                     state.peakViewers = 0;
-                    // If follower count is available, update it. Otherwise, keep the old value.
                     state.followers = content.followerCount || state.followers;
                 }
             } else {
