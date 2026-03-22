@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const url = `https://corsproxy.io/?https://api.chzzk.naver.com/polling/v2/channels/${state.channelId}/live-status`;
+        const url = `/api/live-status?channelId=${state.channelId}`;
         const previousStatus = state.liveStatus;
 
         try {
