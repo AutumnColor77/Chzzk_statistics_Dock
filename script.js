@@ -4,10 +4,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const statsContainer = document.getElementById('stats-container');
     const settingsToggleButton = document.getElementById('settings-toggle-button');
     
-    const colorPicker = document.getElementById('value-color-picker');
     const channelIdInput = document.getElementById('channel-id-input');
     const saveButton = document.getElementById('save-channel-id');
-    const toggles = document.querySelectorAll('.settings-group input[type="checkbox"]');
     const statItems = document.querySelectorAll('.stat-item');
 
     // --- State Management ---
@@ -82,10 +80,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateUi() {
-        if (statsContainer.style.display === 'none') {
-            statsContainer.style.display = 'grid';
-        }
-
         const items = {
             'concurrent-viewers': state.liveStatus === 'OPEN' ? state.concurrentViewers.toLocaleString() : '오프라인',
             'peak-viewers': state.liveStatus === 'OPEN' ? state.peakViewers.toLocaleString() : '오프라인',
@@ -101,12 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const valueEl = item.querySelector('.value');
             const itemId = item.id;
             const key = itemId.replace('-item', '');
-
-            if (item.classList.contains('value-hidden')) {
-                valueEl.textContent = '가려짐';
-            } else {
-                valueEl.textContent = items[key];
-            }
+            valueEl.textContent = items[key];
         });
     }
 
@@ -120,14 +109,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- UI and Event Listeners ---
     function setupInitialUI(hasChannelId) {
+        // Stats are always visible. Settings panel starts hidden if ID is present.
+        statsContainer.style.display = 'grid';
+        settingsToggleButton.style.display = 'block';
+
         if (hasChannelId) {
-            statsContainer.style.display = 'grid';
             settingsPanel.classList.remove('visible');
-            settingsToggleButton.style.display = 'block';
         } else {
-            statsContainer.style.display = 'none';
             settingsPanel.classList.add('visible');
-            settingsToggleButton.style.display = 'none';
         }
     }
     
@@ -136,10 +125,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function saveChannelId() {
-        const newId = channelIdInput.value.trim();
+        let newId = channelIdInput.value.trim();
+
+        if (newId.includes('chzzk.naver.com/live/')) {
+            try {
+                const url = new URL(newId);
+                const pathParts = url.pathname.split('/');
+                newId = pathParts[pathParts.length - 1] || '';
+            } catch (e) {
+                console.error("Invalid URL format:", e);
+            }
+        }
+        
         if (newId) {
             state.channelId = newId;
-            localStorage.setItem('chzzkChannelId', newId);
             state.viewerHistory = [];
             setupInitialUI(true);
             startFetching();
@@ -151,64 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter') saveChannelId();
     });
 
-    colorPicker.addEventListener('input', (event) => {
-        const newColor = event.target.value;
-        document.querySelectorAll('.value').forEach(el => {
-            el.style.color = newColor;
-        });
-        localStorage.setItem('valueColor', newColor);
-    });
-    
-    // Setup for all toggles (checkboxes and clickable stat items)
-    toggles.forEach(toggle => {
-        const targetId = toggle.dataset.target;
-        const targetItem = document.getElementById(targetId);
-        if (!targetItem) return;
-        
-        const storageKey = `value-hidden-${targetId}`;
-        
-        // Load saved state
-        const isHidden = localStorage.getItem(storageKey) === 'true';
-        toggle.checked = !isHidden;
-        targetItem.classList.toggle('value-hidden', isHidden);
-
-        // When checkbox is changed, update state
-        toggle.addEventListener('change', (event) => {
-            const shouldHide = !event.target.checked;
-            targetItem.classList.toggle('value-hidden', shouldHide);
-            localStorage.setItem(storageKey, shouldHide);
-            updateUi(); // Re-render UI to show "가려짐" or the value
-        });
-    });
-
-    statItems.forEach(item => {
-        item.addEventListener('click', () => {
-            const correspondingToggle = document.querySelector(`input[data-target="${item.id}"]`);
-            if (correspondingToggle) correspondingToggle.click();
-        });
-    });
-
     // --- Initialization ---
     function initialize() {
-        const savedId = localStorage.getItem('chzzkChannelId');
-        state.channelId = savedId;
-        
-        setupInitialUI(!!savedId);
-
-        if(savedId) {
-            channelIdInput.value = savedId;
-            startFetching();
-        } else {
-            updateUi(); // Show "ID 없음" message
-        }
-
-        const savedColor = localStorage.getItem('valueColor');
-        if (savedColor) {
-            colorPicker.value = savedColor;
-             document.querySelectorAll('.value:not(.value-hidden .value)').forEach(el => {
-                el.style.color = savedColor;
-            });
-        }
+        setupInitialUI(false);
+        updateUi(); // Show "ID 없음" message initially
     }
 
     initialize();

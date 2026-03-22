@@ -6,16 +6,7 @@ body {
     padding: 10px;
     font-size: 14px;
     position: relative;
-}
-
-#settings-toggle-button {
-    position: absolute;
-    top: 5px;
-    right: 10px;
-    cursor: pointer;
-    font-size: 20px;
-    z-index: 100;
-    display: none; /* Initially hidden, shown by JS if ID is set */
+    text-align: center; /* Center align all content */
 }
 
 #stats-container {
@@ -23,7 +14,6 @@ body {
     grid-template-columns: 1fr 1fr; /* Two columns */
     gap: 8px;
     margin-bottom: 15px;
-    margin-top: 25px; /* Add space for the gear icon */
 }
 
 .stat-item {
@@ -33,7 +23,6 @@ body {
     background-color: #363636;
     padding: 8px 12px;
     border-radius: 4px;
-    cursor: pointer; /* Indicate items are clickable */
     -webkit-user-select: none; /* Disable text selection */
     user-select: none;
 }
@@ -45,37 +34,36 @@ body {
 .stat-item .value {
     font-family: 'Consolas', 'Menlo', monospace;
     font-size: 16px;
+    color: #4CAF50; /* Default color, as picker is removed */
+}
+
+#settings-container {
+    margin-top: 10px;
+}
+
+#settings-toggle-button {
+    cursor: pointer;
+    font-size: 20px;
+    display: inline-block; /* Make it part of the flow */
+    margin-bottom: 10px;
 }
 
 #settings-panel {
-    border-top: 1px solid #444;
-    padding-top: 10px;
     display: none; /* Hidden by default */
-    flex-direction: column;
-    gap: 10px;
-}
-
-#settings-panel.visible {
-    display: flex;
-}
-
-.settings-group {
     background-color: #333;
     border-radius: 4px;
-    padding: 8px;
+    padding: 10px;
     border: 1px solid #444;
 }
 
-.setting-item, .setting-toggle {
+#settings-panel.visible {
+    display: block;
+}
+
+.setting-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 5px;
-    padding: 4px;
-}
-
-.setting-toggle:last-child, .setting-item:last-child {
-    margin-bottom: 0;
 }
 
 #channel-id-input {
@@ -99,37 +87,4 @@ body {
 
 #save-channel-id:hover {
     background-color: #5a5a5a;
-}
-
-#value-color-picker {
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    width: 40px;
-    height: 25px;
-    background-color: transparent;
-    border: 1px solid #555;
-    cursor: pointer;
-    padding: 0;
-}
-#value-color-picker::-webkit-color-swatch {
-    border-radius: 3px;
-    border: none;
-}
-#value-color-picker::-moz-color-swatch {
-    border-radius: 3px;
-    border: none;
-}
-
-.setting-toggle label {
-    cursor: pointer;
-    flex-grow: 1;
-}
-
-.stat-item.value-hidden {
-    opacity: 0.7;
-}
-
-.stat-item.value-hidden .value {
-    color: #888 !important; /* Use important to override custom color picker color */
 }
