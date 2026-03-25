@@ -7,41 +7,61 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div class="background-glow"></div>
     <div id="main-container">
         
-        <div id="auth-section">
-            <p class="auth-desc">방송 정보(통계+설정)를 불러오려면 치지직 계정과 연동하세요.</p>
-            <button id="chzzk-login-btn" class="chzzk-btn">치지직 계정 연동</button>
+        <div id="auth-section" class="glass-panel">
+            <div class="auth-header">
+                <svg class="auth-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="var(--chzzk-green)"/>
+                    <path d="M2 17L12 22L22 17M2 12L12 17L22 12" stroke="var(--chzzk-green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <h2>Chzzk Dock</h2>
+            </div>
+            <p class="auth-desc">방송 정보와 귀중한 통계를 보려면<br/>치지직 계정 연동과 승인이 필요합니다.</p>
+            <button id="chzzk-login-btn" class="chzzk-btn chzzk-btn-glow">치지직 계정 연동하기</button>
         </div>
 
-        <div id="dashboard-section" style="display: none; flex-direction: column; gap: 8px;">
-            <div id="settings-panel">
+        <div id="dashboard-section" style="display: none; flex-direction: column; gap: 16px;">
+            <div class="dashboard-header">
+                <div class="header-title">
+                    <span class="status-dot"></span>
+                    <span id="header-channel-name">방송 관리 대시보드</span>
+                </div>
+            </div>
+
+            <div id="settings-panel" class="glass-panel">
                 <div class="setting-item">
-                    <label for="live-title-input">방송제목</label>
-                    <input type="text" id="live-title-input" placeholder="방송 제목을 입력하세요">
+                    <label for="live-title-input">방송 제목</label>
+                    <input type="text" id="live-title-input" class="modern-input" placeholder="방송 제목을 입력하세요">
                 </div>
                 <div class="setting-item" style="display: none;">
                     <label for="live-category-type">카테고리 종류</label>
-                    <select id="live-category-type">
-                        <option value="GAME">게임 (GAME)</option>
-                        <option value="SPORTS">스포츠 (SPORTS)</option>
-                        <option value="ETC">기타 (ETC)</option>
-                    </select>
+                    <div class="select-wrapper">
+                        <select id="live-category-type" class="modern-input">
+                            <option value="GAME">게임 (GAME)</option>
+                            <option value="SPORTS">스포츠 (SPORTS)</option>
+                            <option value="ETC">기타 (ETC)</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="setting-item" style="position: relative;">
-                    <label for="category-search-input">카테고리 검색 (게임명 등)</label>
-                    <input type="text" id="category-search-input" placeholder="검색어 입력 (예: 원신) 후 클릭">
+                    <label for="category-search-input">카테고리 검색</label>
+                    <input type="text" id="category-search-input" class="modern-input" placeholder="검색어 입력 후 대기 (예: 원신)">
                     <div id="category-search-results" class="autocomplete-dropdown" style="display: none;"></div>
                     <input type="hidden" id="live-category-id" value="">
-                    <div id="selected-category-display" style="font-size: 13px; color: var(--chzzk-green); margin-top: 2px; display: none;">선택됨: <span id="selected-category-name"></span></div>
+                    
+                    <div id="selected-category-display" class="selected-badge" style="display: none;">
+                        <span class="badge-dot"></span><span id="selected-category-name"></span>
+                    </div>
                 </div>
                 <div class="setting-item">
                     <label for="live-tags-input">태그 (쉼표로 구분)</label>
-                    <input type="text" id="live-tags-input" placeholder="예: 소통, 종합게임">
+                    <input type="text" id="live-tags-input" class="modern-input" placeholder="예: 소통, 종합게임, 신작">
                 </div>
                 
                 <div class="action-buttons">
-                    <button id="save-live-settings" class="chzzk-btn">설정 업데이트</button>
+                    <button id="save-live-settings" class="chzzk-btn">설정 즉시 업데이트</button>
                 </div>
                 <p id="settings-status-msg"></p>
             </div>
@@ -65,7 +85,7 @@
                 </div>
             </div>
 
-            <button id="chzzk-logout-btn" class="secondary-btn">연동 해제</button>
+            <button id="chzzk-logout-btn" class="secondary-btn">연동 해제 및 로그아웃</button>
         </div>
 
     </div>
