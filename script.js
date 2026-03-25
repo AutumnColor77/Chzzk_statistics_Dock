@@ -2,7 +2,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Elements ---
     const settingsPanel = document.getElementById('settings-panel');
     const statsContainer = document.getElementById('stats-container');
-    const settingsToggleButton = document.getElementById('settings-toggle-button');
     
     // UI elements for settings updates
     const statItems = document.querySelectorAll('.stat-item');
@@ -112,11 +111,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- UI and Event Listeners ---
-    function updateSettingsButtonText() {
-        const isVisible = settingsPanel.classList.contains('visible');
-        settingsToggleButton.textContent = isVisible ? '설정 접기' : '설정 열기';
-    }
-
     // Setting panel logic depends entirely on auth state now.
 
     // --- Auth & Settings Management ---
@@ -264,15 +258,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- Initialization ---
-    settingsToggleButton.addEventListener('click', () => {
-        settingsPanel.classList.toggle('visible');
-        updateSettingsButtonText();
-    });
-
     function initialize() {
         statsContainer.style.display = 'none';
-        settingsPanel.classList.add('visible');
-        updateSettingsButtonText();
 
         const savedId = localStorage.getItem('chzzkChannelId');
         if (savedId) {
