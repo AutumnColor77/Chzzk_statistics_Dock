@@ -1,3 +1,28 @@
 # 설명용 자료 (Git 업로드 제외)
 치지직 통계 독 적용 방법.pdf
 치지직 통계 독 적용 방법.pptx
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Build and Dist
+dist/
+build/
