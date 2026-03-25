@@ -235,8 +235,9 @@ document.addEventListener('DOMContentLoaded', () => {
             tags: tags
         };
         
-        if (categoryId) body.categoryId = categoryId;
-        else body.categoryId = "";
+        if (categoryId) {
+            body.categoryId = categoryId;
+        }
 
         saveSettingsBtn.disabled = true;
         statusMsg.textContent = '업데이트 중...';
@@ -256,7 +257,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusMsg.textContent = '방송 설정이 업데이트 되었습니다.';
                 statusMsg.className = 'success-msg';
             } else {
-                statusMsg.textContent = '업데이트 실패 (권한이나 입력값을 확인하세요).';
+                let errorDetails = '';
+                try {
+                    const errPayload = await response.json();
+                    if (errPayload.message) errorDetails = ` (${errPayload.message})`;
+                } catch (e) {}
+                statusMsg.textContent = `업데이트 실패${errorDetails} (권한/입력값 확인)`;
                 statusMsg.className = 'error-msg';
             }
         } catch (error) {

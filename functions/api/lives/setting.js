@@ -22,7 +22,8 @@ export async function onRequest(context) {
   };
 
   if (request.method === 'PATCH') {
-    fetchOptions.body = request.body;
+    const textBody = await request.text();
+    fetchOptions.body = textBody;
   }
 
   const response = await fetch(apiUrl, fetchOptions);
