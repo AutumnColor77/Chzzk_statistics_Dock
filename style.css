@@ -260,3 +260,93 @@ body {
         width: 100%;
     }
 }
+
+.setting-divider {
+    height: 1px;
+    background-color: var(--card-border);
+    margin: 15px 0;
+}
+
+.auth-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}
+
+.chzzk-btn {
+    background-color: var(--chzzk-green);
+    color: #1a1a1a;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-family: inherit;
+    transition: background-color 0.2s;
+    width: 100%;
+}
+
+.chzzk-btn:hover {
+    background-color: var(--chzzk-green-hover);
+}
+
+.secondary-btn {
+    background-color: transparent;
+    color: #ff4d4f;
+    border: 1px solid #ff4d4f;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background-color 0.2s, color 0.2s;
+    width: 100%;
+    margin-top: 5px;
+}
+
+.secondary-btn:hover {
+    background-color: #ff4d4f;
+    color: white;
+}
+
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 15px;
+}
+
+select#live-category-type {
+   width: 100%;
+   padding: 8px;
+   background-color: rgba(255, 255, 255, 0.04);
+   border: 1px solid rgba(255, 255, 255, 0.1);
+   color: var(--text-main);
+   border-radius: 4px;
+   font-family: inherit;
+   outline: none;
+}
+input#live-title-input, input#live-category-id, input#live-tags-input {
+    width: 100%;
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-main);
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    transition: all 0.2s ease;
+    outline: none;
+}
+input#live-title-input:focus, input#live-category-id:focus, input#live-tags-input:focus {
+    border-color: var(--chzzk-green);
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+#settings-status-msg {
+    margin-top: 10px;
+    font-size: 12px;
+    text-align: center;
+    min-height: 15px;
+}
+.success-msg { color: var(--chzzk-green); }
+.error-msg { color: #ff4d4f; }
