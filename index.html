@@ -8,7 +8,13 @@
 </head>
 <body>
     <div id="main-container">
-        <div id="stats-container">
+        <div id="settings-container">
+            <div id="settings-toggle-button">설정 열기</div>
+            <div id="settings-panel">
+                <div id="auth-section">
+                    <p class="auth-desc">방송 정보(통계+설정)를 불러오려면 치지직 계정과 연동하세요.</p>
+                    <button id="chzzk-login-btn" class="chzzk-btn">치지직 계정 연동</button>
+                </div>
             <div class="stat-item" id="concurrent-viewers-item">
                 <span class="label">동시 시청자</span>
                 <span class="value" id="concurrent-viewers">0</span>
@@ -26,22 +32,7 @@
                 <span class="value" id="followers">0</span>
             </div>
         </div>
-
-        <div id="settings-container">
-            <div id="settings-toggle-button">설정 열기</div>
-            <div id="settings-panel">
-                 <div class="setting-item">
-                    <label for="channel-id-input">방송 주소 (통계용)</label>
-                    <input type="text" id="channel-id-input" placeholder="전체 주소 또는 ID 붙여넣기">
-                    <button id="save-channel-id">저장</button>
-                </div>
-                
-                <div class="setting-divider"></div>
-
-                <div id="auth-section">
-                    <p class="auth-desc">방송 설정을 변경하려면 치지직 계정과 연동하세요.</p>
-                    <button id="chzzk-login-btn" class="chzzk-btn">치지직 결제 연동</button>
-                </div>
+    </div>
 
                 <div id="live-settings-section" style="display: none;">
                     <div class="setting-item">
@@ -71,6 +62,25 @@
                     </div>
                     <p id="settings-status-msg"></p>
                 </div>
+            </div>
+        </div>
+
+        <div id="stats-container" style="display: none;">
+            <div class="stat-item" id="concurrent-viewers-item">
+                <span class="label">동시 시청자</span>
+                <span class="value" id="concurrent-viewers">0</span>
+            </div>
+            <div class="stat-item" id="peak-viewers-item">
+                <span class="label">최고 시청자</span>
+                <span class="value" id="peak-viewers">0</span>
+            </div>
+            <div class="stat-item" id="average-viewers-item">
+                <span class="label">평균 시청자</span>
+                <span class="value" id="average-viewers">0</span>
+            </div>
+            <div class="stat-item" id="followers-item">
+                <span class="label">팔로워</span>
+                <span class="value" id="followers">0</span>
             </div>
         </div>
     </div>

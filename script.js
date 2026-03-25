@@ -4,8 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statsContainer = document.getElementById('stats-container');
     const settingsToggleButton = document.getElementById('settings-toggle-button');
     
-    const channelIdInput = document.getElementById('channel-id-input');
-    const saveButton = document.getElementById('save-channel-id');
+    // UI elements for settings updates
     const statItems = document.querySelectorAll('.stat-item');
 
     // --- State Management ---
@@ -118,49 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
         settingsToggleButton.textContent = isVisible ? '설정 접기' : '설정 열기';
     }
 
-    function setupInitialUI(hasChannelId) {
-        statsContainer.style.display = 'grid';
-        settingsToggleButton.style.display = 'block';
-
-        if (hasChannelId) {
-            settingsPanel.classList.remove('visible');
-        } else {
-            settingsPanel.classList.add('visible');
-        }
-        updateSettingsButtonText();
-    }
-    
-    settingsToggleButton.addEventListener('click', () => {
-        settingsPanel.classList.toggle('visible');
-        updateSettingsButtonText();
-    });
-
-    function saveChannelId() {
-        let newId = channelIdInput.value.trim();
-
-        if (newId.includes('chzzk.naver.com/live/')) {
-            try {
-                const url = new URL(newId);
-                const pathParts = url.pathname.split('/');
-                newId = pathParts[pathParts.length - 1] || '';
-            } catch (e) {
-                console.error("Invalid URL format:", e);
-            }
-        }
-        
-        if (newId) {
-            state.channelId = newId;
-            localStorage.setItem('chzzkChannelId', newId); // Save the channel ID
-            state.viewerHistory = [];
-            setupInitialUI(true);
-            startFetching();
-        }
-    }
-
-    saveButton.addEventListener('click', saveChannelId);
-    channelIdInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') saveChannelId();
-    });
+    // Setting panel logic depends entirely on auth state now.
 
     // --- Auth & Settings Management ---
     const loginBtn = document.getElementById('chzzk-login-btn');
@@ -172,14 +129,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let accessToken = localStorage.getItem('chzzkAccessToken');
 
+    async function fetchUserChannel() {
+        if (!accessToken) return;
+        try {
+            const response = await fetch('/api/users/me', {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                if (data.content && data.content.channelId) {
+                    state.channelId = data.content.channelId;
+                    localStorage.setItem('chzzkChannelId', state.channelId);
+                    document.getElementById('stats-container').style.display = 'grid';
+                    startFetching();
+                }
+            } else if (response.status === 401) {
+                logoutBtn.click();
+            }
+        } catch (error) {
+            console.error('Failed to fetch user channel', error);
+        }
+    }
+
     function updateAuthUi() {
         if (accessToken) {
             authSection.style.display = 'none';
             liveSettingsSection.style.display = 'block';
             fetchLiveSettings();
+            fetchUserChannel();
         } else {
             authSection.style.display = 'block';
             liveSettingsSection.style.display = 'none';
+            document.getElementById('stats-container').style.display = 'none';
+            if (fetchInterval) clearInterval(fetchInterval);
+            state.channelId = null;
+            updateUi();
         }
     }
 
@@ -280,15 +264,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- Initialization ---
+    settingsToggleButton.addEventListener('click', () => {
+        settingsPanel.classList.toggle('visible');
+        updateSettingsButtonText();
+    });
+
     function initialize() {
+        statsContainer.style.display = 'none';
+        settingsPanel.classList.add('visible');
+        updateSettingsButtonText();
+
         const savedId = localStorage.getItem('chzzkChannelId');
         if (savedId) {
             state.channelId = savedId;
-            channelIdInput.value = savedId; // Pre-fill the input field
-            setupInitialUI(true);
+            statsContainer.style.display = 'grid';
             startFetching();
         } else {
-            setupInitialUI(false);
             updateUi(); // Show "ID 없음" message initially
         }
         
