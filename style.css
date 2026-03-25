@@ -46,14 +46,14 @@ body {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
-    margin-bottom: 24px;
+    margin-bottom: 8px;
 }
 
 .stat-item {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: center;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     padding: 14px 16px;
@@ -97,7 +97,7 @@ body {
     font-size: 12.5px;
     color: var(--text-muted);
     letter-spacing: -0.2px;
-    margin-bottom: 6px;
+    margin-bottom: 0;
     position: relative;
     z-index: 1;
 }
@@ -131,6 +131,7 @@ body {
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
+    margin-bottom: 20px;
 }
 
 .setting-item label {
@@ -278,7 +279,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    margin-top: 15px;
+    margin-top: 4px;
 }
 
 select#live-category-type {
