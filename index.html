@@ -8,80 +8,63 @@
 </head>
 <body>
     <div id="main-container">
-        <div id="settings-container">
+        
+        <div id="auth-section">
+            <p class="auth-desc">방송 정보(통계+설정)를 불러오려면 치지직 계정과 연동하세요.</p>
+            <button id="chzzk-login-btn" class="chzzk-btn">치지직 계정 연동</button>
+        </div>
+
+        <div id="dashboard-section" style="display: none; flex-direction: column; gap: 16px;">
             <div id="settings-panel">
-                <div id="auth-section">
-                    <p class="auth-desc">방송 정보(통계+설정)를 불러오려면 치지직 계정과 연동하세요.</p>
-                    <button id="chzzk-login-btn" class="chzzk-btn">치지직 계정 연동</button>
+                <div class="setting-item">
+                    <label for="live-title-input">방제</label>
+                    <input type="text" id="live-title-input" placeholder="방송 제목을 입력하세요">
                 </div>
-            <div class="stat-item" id="concurrent-viewers-item">
-                <span class="label">동시 시청자</span>
-                <span class="value" id="concurrent-viewers">0</span>
+                <div class="setting-item">
+                    <label for="live-category-type">카테고리 종류</label>
+                    <select id="live-category-type">
+                        <option value="GAME">게임 (GAME)</option>
+                        <option value="SPORTS">스포츠 (SPORTS)</option>
+                        <option value="ETC">기타 (ETC)</option>
+                    </select>
+                </div>
+                <div class="setting-item">
+                    <label for="live-category-id">카테고리 ID (선택)</label>
+                    <input type="text" id="live-category-id" placeholder="예: 254 (원신)">
+                </div>
+                <div class="setting-item">
+                    <label for="live-tags-input">태그 (쉼표로 구분)</label>
+                    <input type="text" id="live-tags-input" placeholder="예: 소통, 종합게임">
+                </div>
+                
+                <div class="action-buttons">
+                    <button id="save-live-settings" class="chzzk-btn">설정 업데이트</button>
+                </div>
+                <p id="settings-status-msg"></p>
             </div>
-            <div class="stat-item" id="peak-viewers-item">
-                <span class="label">최고 시청자</span>
-                <span class="value" id="peak-viewers">0</span>
-            </div>
-            <div class="stat-item" id="average-viewers-item">
-                <span class="label">평균 시청자</span>
-                <span class="value" id="average-viewers">0</span>
-            </div>
-            <div class="stat-item" id="followers-item">
-                <span class="label">팔로워</span>
-                <span class="value" id="followers">0</span>
-            </div>
-        </div>
-    </div>
 
-                <div id="live-settings-section" style="display: none;">
-                    <div class="setting-item">
-                        <label for="live-title-input">방제</label>
-                        <input type="text" id="live-title-input" placeholder="방송 제목을 입력하세요">
-                    </div>
-                    <div class="setting-item">
-                        <label for="live-category-type">카테고리 종류</label>
-                        <select id="live-category-type">
-                            <option value="GAME">게임 (GAME)</option>
-                            <option value="SPORTS">스포츠 (SPORTS)</option>
-                            <option value="ETC">기타 (ETC)</option>
-                        </select>
-                    </div>
-                    <div class="setting-item">
-                        <label for="live-category-id">카테고리 ID (선택)</label>
-                        <input type="text" id="live-category-id" placeholder="예: 254 (원신)">
-                    </div>
-                    <div class="setting-item">
-                        <label for="live-tags-input">태그 (쉼표로 구분)</label>
-                        <input type="text" id="live-tags-input" placeholder="예: 소통, 종합게임">
-                    </div>
-                    
-                    <div class="action-buttons">
-                        <button id="save-live-settings" class="chzzk-btn">설정 업데이트</button>
-                        <button id="chzzk-logout-btn" class="secondary-btn">연동 해제</button>
-                    </div>
-                    <p id="settings-status-msg"></p>
+            <div id="stats-container">
+                <div class="stat-item" id="concurrent-viewers-item">
+                    <span class="label">동시 시청자</span>
+                    <span class="value" id="concurrent-viewers">0</span>
+                </div>
+                <div class="stat-item" id="peak-viewers-item">
+                    <span class="label">최고 시청자</span>
+                    <span class="value" id="peak-viewers">0</span>
+                </div>
+                <div class="stat-item" id="average-viewers-item">
+                    <span class="label">평균 시청자</span>
+                    <span class="value" id="average-viewers">0</span>
+                </div>
+                <div class="stat-item" id="followers-item">
+                    <span class="label">팔로워</span>
+                    <span class="value" id="followers">0</span>
                 </div>
             </div>
+
+            <button id="chzzk-logout-btn" class="secondary-btn">연동 해제</button>
         </div>
 
-        <div id="stats-container" style="display: none;">
-            <div class="stat-item" id="concurrent-viewers-item">
-                <span class="label">동시 시청자</span>
-                <span class="value" id="concurrent-viewers">0</span>
-            </div>
-            <div class="stat-item" id="peak-viewers-item">
-                <span class="label">최고 시청자</span>
-                <span class="value" id="peak-viewers">0</span>
-            </div>
-            <div class="stat-item" id="average-viewers-item">
-                <span class="label">평균 시청자</span>
-                <span class="value" id="average-viewers">0</span>
-            </div>
-            <div class="stat-item" id="followers-item">
-                <span class="label">팔로워</span>
-                <span class="value" id="followers">0</span>
-            </div>
-        </div>
     </div>
 
     <script src="script.js"></script>

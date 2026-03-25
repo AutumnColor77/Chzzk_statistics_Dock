@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Auth & Settings Management ---
     const loginBtn = document.getElementById('chzzk-login-btn');
     const authSection = document.getElementById('auth-section');
-    const liveSettingsSection = document.getElementById('live-settings-section');
+    const dashboardSection = document.getElementById('dashboard-section');
     const saveSettingsBtn = document.getElementById('save-live-settings');
     const logoutBtn = document.getElementById('chzzk-logout-btn');
     const statusMsg = document.getElementById('settings-status-msg');
@@ -148,13 +148,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateAuthUi() {
         if (accessToken) {
             authSection.style.display = 'none';
-            liveSettingsSection.style.display = 'block';
+            dashboardSection.style.display = 'flex';
             fetchLiveSettings();
             fetchUserChannel();
         } else {
             authSection.style.display = 'block';
-            liveSettingsSection.style.display = 'none';
-            document.getElementById('stats-container').style.display = 'none';
+            dashboardSection.style.display = 'none';
             if (fetchInterval) clearInterval(fetchInterval);
             state.channelId = null;
             updateUi();
@@ -259,8 +258,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initialization ---
     function initialize() {
-        statsContainer.style.display = 'none';
-
         const savedId = localStorage.getItem('chzzkChannelId');
         if (savedId) {
             state.channelId = savedId;
