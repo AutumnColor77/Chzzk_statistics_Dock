@@ -28,9 +28,12 @@
                         <option value="ETC">기타 (ETC)</option>
                     </select>
                 </div>
-                <div class="setting-item">
-                    <label for="live-category-id">카테고리 ID (선택)</label>
-                    <input type="text" id="live-category-id" placeholder="예: 254 (원신)">
+                <div class="setting-item" style="position: relative;">
+                    <label for="category-search-input">카테고리 검색 (게임명 등)</label>
+                    <input type="text" id="category-search-input" placeholder="검색어 입력 (예: 원신) 후 클릭">
+                    <div id="category-search-results" class="autocomplete-dropdown" style="display: none;"></div>
+                    <input type="hidden" id="live-category-id" value="">
+                    <div id="selected-category-display" style="font-size: 13px; color: var(--chzzk-green); margin-top: 5px; display: none;">선택됨: <span id="selected-category-name"></span></div>
                 </div>
                 <div class="setting-item">
                     <label for="live-tags-input">태그 (쉼표로 구분)</label>

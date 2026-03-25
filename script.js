@@ -123,6 +123,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const logoutBtn = document.getElementById('chzzk-logout-btn');
     const statusMsg = document.getElementById('settings-status-msg');
 
+    // Category Autocomplete DOM
+    const categorySearchInput = document.getElementById('category-search-input');
+    const categorySearchResults = document.getElementById('category-search-results');
+    const categoryTypeSelect = document.getElementById('live-category-type');
+    const liveCategoryIdInput = document.getElementById('live-category-id');
+    const selectedCategoryDisplay = document.getElementById('selected-category-display');
+    const selectedCategoryName = document.getElementById('selected-category-name');
+
     let accessToken = localStorage.getItem('chzzkAccessToken');
 
     async function fetchUserChannel() {
@@ -209,8 +217,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await response.json();
                 if (data.content) {
                     document.getElementById('live-title-input').value = data.content.defaultLiveTitle || '';
-                    document.getElementById('live-category-type').value = data.content.categoryType || 'GAME';
-                    document.getElementById('live-category-id').value = data.content.categoryId || '';
+                    if (data.content.category) {
+                        categoryTypeSelect.value = data.content.category.categoryType || 'GAME';
+                        liveCategoryIdInput.value = data.content.category.categoryId || '';
+                        categorySearchInput.value = data.content.category.categoryValue || '';
+                        if (data.content.category.categoryValue) {
+                            selectedCategoryName.textContent = data.content.category.categoryValue;
+                            selectedCategoryDisplay.style.display = 'block';
+                        } else {
+                            selectedCategoryDisplay.style.display = 'none';
+                        }
+                    } else {
+                        categoryTypeSelect.value = data.content.categoryType || 'GAME';
+                        liveCategoryIdInput.value = '';
+                        categorySearchInput.value = '';
+                        selectedCategoryDisplay.style.display = 'none';
+                    }
                     document.getElementById('live-tags-input').value = (data.content.tags || []).join(', ');
                 }
             }
@@ -223,8 +245,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!accessToken) return;
         
         const title = document.getElementById('live-title-input').value.trim();
-        const categoryType = document.getElementById('live-category-type').value;
-        const categoryId = document.getElementById('live-category-id').value.trim();
+        const categoryType = categoryTypeSelect.value;
+        const categoryId = liveCategoryIdInput.value.trim();
         const tagsInput = document.getElementById('live-tags-input').value;
         
         const tags = tagsInput ? tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag) : [];
@@ -271,6 +293,75 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             saveSettingsBtn.disabled = false;
             setTimeout(() => { statusMsg.textContent = ''; }, 3000);
+        }
+    });
+
+    // --- Category Search Autocomplete Logic ---
+    let searchTimeout = null;
+
+    categorySearchInput.addEventListener('input', (e) => {
+        const query = e.target.value.trim();
+        if (!query) {
+            liveCategoryIdInput.value = '';
+            selectedCategoryDisplay.style.display = 'none';
+            categorySearchResults.style.display = 'none';
+            return;
+        }
+
+        if (searchTimeout) clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => performCategorySearch(query), 300);
+    });
+
+    async function performCategorySearch(query) {
+        if (!query) return;
+        try {
+            const res = await fetch(`/api/categories/search?query=${encodeURIComponent(query)}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.content && data.content.data) {
+                    renderCategoryResults(data.content.data);
+                } else if (data.data) {
+                    renderCategoryResults(data.data);
+                } else {
+                    renderCategoryResults([]);
+                }
+            }
+        } catch (error) {
+            console.error('Search API Error', error);
+        }
+    }
+
+    function renderCategoryResults(results) {
+        categorySearchResults.innerHTML = '';
+        if (!results || results.length === 0) {
+            categorySearchResults.style.display = 'none';
+            return;
+        }
+
+        const ul = document.createElement('ul');
+        results.forEach(item => {
+            const li = document.createElement('li');
+            li.textContent = item.categoryValue;
+            li.addEventListener('click', () => {
+                liveCategoryIdInput.value = item.categoryId;
+                categorySearchInput.value = item.categoryValue;
+                if (item.categoryType) {
+                    categoryTypeSelect.value = item.categoryType;
+                }
+                selectedCategoryName.textContent = item.categoryValue;
+                selectedCategoryDisplay.style.display = 'block';
+                categorySearchResults.style.display = 'none';
+            });
+            ul.appendChild(li);
+        });
+
+        categorySearchResults.appendChild(ul);
+        categorySearchResults.style.display = 'block';
+    }
+
+    document.addEventListener('click', (e) => {
+        if (!categorySearchInput.contains(e.target) && !categorySearchResults.contains(e.target)) {
+            categorySearchResults.style.display = 'none';
         }
     });
 
