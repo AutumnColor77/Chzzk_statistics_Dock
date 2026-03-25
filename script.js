@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.averageViewers = Math.round(sum / state.viewerHistory.length);
     }
 
-    function updateUi() {
+    function updateUi(customErrorMsg) {
         const items = {
             'concurrent-viewers': state.liveStatus === 'OPEN' ? state.concurrentViewers.toLocaleString() : '오프라인',
             'peak-viewers': state.liveStatus === 'OPEN' ? state.peakViewers.toLocaleString() : '오프라인',
@@ -85,8 +85,10 @@ document.addEventListener('DOMContentLoaded', () => {
             'followers': state.followers > 0 ? state.followers.toLocaleString() : (state.liveStatus === 'CLOSE' ? '오프라인' : '0'),
         };
 
-        if (!state.channelId) {
-             Object.keys(items).forEach(key => items[key] = 'ID 없음');
+        if (customErrorMsg) {
+            Object.keys(items).forEach(key => items[key] = customErrorMsg);
+        } else if (!state.channelId) {
+             Object.keys(items).forEach(key => items[key] = '로딩 중...');
         }
 
         statItems.forEach(item => {
@@ -134,21 +136,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.content && data.content.channelId) {
                     state.channelId = data.content.channelId;
                     localStorage.setItem('chzzkChannelId', state.channelId);
-                    document.getElementById('stats-container').style.display = 'grid';
-                    startFetching();
+                    startFetching(); // this will call updateUi
+                } else {
+                    updateUi('채널 정보 없음');
                 }
             } else if (response.status === 401) {
                 logoutBtn.click();
+            } else if (response.status === 403) {
+                updateUi('권한 부족 (유저정보)');
+                statusMsg.textContent = '앱 설정에서 유저 정보 조회 권한을 추가해주세요.';
+                statusMsg.className = 'error-msg';
+            } else {
+                updateUi('연동 에러');
             }
         } catch (error) {
             console.error('Failed to fetch user channel', error);
+            updateUi('네트워크 에러');
         }
     }
 
     function updateAuthUi() {
+        const dashboardSection = document.getElementById('dashboard-section');
         if (accessToken) {
             authSection.style.display = 'none';
             dashboardSection.style.display = 'flex';
+            updateUi(); // Load initial layout values (e.g. "로딩 중...")
             fetchLiveSettings();
             fetchUserChannel();
         } else {
@@ -156,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dashboardSection.style.display = 'none';
             if (fetchInterval) clearInterval(fetchInterval);
             state.channelId = null;
-            updateUi();
+            updateUi('ID 없음');
         }
     }
 
