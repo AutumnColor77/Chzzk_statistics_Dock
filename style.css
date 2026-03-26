@@ -248,7 +248,7 @@ select.modern-input {
     border-radius: 20px;
     font-size: 12px;
     font-weight: 600;
-    margin-top: 8px;
+    margin-top: 4px;
     animation: fadeIn 0.3s ease;
 }
 
@@ -365,10 +365,10 @@ select.modern-input {
 
 /* Status Message */
 #settings-status-msg {
-    margin-top: 12px;
+    margin-top: 6px;
     font-size: 12.5px;
     text-align: center;
-    min-height: 16px;
+    min-height: 0;
     font-weight: 600;
 }
 .success-msg { color: var(--chzzk-green); }
