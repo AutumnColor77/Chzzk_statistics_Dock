@@ -26,7 +26,9 @@ body {
     overflow-x: hidden;
 }
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
     box-sizing: inherit;
 }
 
@@ -37,7 +39,7 @@ body {
     right: -150px;
     width: 300px;
     height: 300px;
-    background: radial-gradient(circle, var(--chzzk-glow) 0%, rgba(0,255,163,0) 70%);
+    background: radial-gradient(circle, var(--chzzk-glow) 0%, rgba(0, 255, 163, 0) 70%);
     z-index: -1;
     pointer-events: none;
     opacity: 0.6;
@@ -48,13 +50,16 @@ body {
     width: 6px;
     height: 6px;
 }
+
 ::-webkit-scrollbar-track {
     background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.15);
     border-radius: 10px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.25);
 }
@@ -179,7 +184,7 @@ body {
 
 /* Settings Panel */
 #settings-panel {
-    padding: 20px 20px 12px 20px;
+    padding: 20px 20px 8px 20px;
 }
 
 .panel-header {
@@ -260,8 +265,15 @@ select.modern-input {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Autocomplete Dropdown */
@@ -273,7 +285,7 @@ select.modern-input {
     background: #1c2128;
     border: 1px solid var(--card-border);
     border-radius: 8px;
-    box-shadow: 0 12px 28px rgba(0,0,0,0.5);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
     z-index: 1000;
     max-height: 220px;
     overflow-y: auto;
@@ -371,12 +383,17 @@ select.modern-input {
     min-height: 0;
     font-weight: 600;
 }
-.success-msg { color: var(--chzzk-green); }
-.error-msg { color: #ff4d4f; }
+
+.success-msg {
+    color: var(--chzzk-green);
+}
+
+.error-msg {
+    color: #ff4d4f;
+}
 
 @media (max-width: 280px) {
     #stats-container {
         grid-template-columns: 1fr;
     }
 }
-
