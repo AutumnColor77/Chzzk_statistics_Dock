@@ -11,7 +11,7 @@ export const state = {
 };
 
 export const globals = {
-    fetchInterval: null,
+    fetchTimeout: null,
     accessToken: localStorage.getItem('chzzkAccessToken')
 };
 

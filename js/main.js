@@ -3,6 +3,14 @@ import { fetchLiveStatus, fetchUserChannel, fetchLiveSettings, updateLiveSetting
 import { login, logout, setupAuthListener } from './auth.js';
 import { dom, updateUi, updateAuthUi, renderCategoryResults, setupHideValuesFeature } from './ui.js';
 
+// --- Polling Configuration (Jitter) ---
+const BASE_INTERVAL_MS = 30000; // 기본 폴링 주기: 30초
+const JITTER_RANGE_MS = 5000;   // Jitter 범위: ±5초 → 실제 25~35초
+
+function getJitteredInterval() {
+    return BASE_INTERVAL_MS + (Math.random() * JITTER_RANGE_MS * 2 - JITTER_RANGE_MS);
+}
+
 // --- Core Data Fetching ---
 
 async function fetchChzzkData() {
@@ -56,16 +64,29 @@ function calculateAverageViewers() {
     state.averageViewers = Math.round(sum / state.viewerHistory.length);
 }
 
+function scheduleNextFetch() {
+    const interval = getJitteredInterval();
+    globals.fetchTimeout = setTimeout(async () => {
+        await fetchChzzkData();
+        if (state.channelId) {
+            scheduleNextFetch();
+        }
+    }, interval);
+}
+
 function startFetching() {
-    if (globals.fetchInterval) clearInterval(globals.fetchInterval);
+    stopFetching();
     if (state.channelId) {
         fetchChzzkData();
-        globals.fetchInterval = setInterval(fetchChzzkData, 30000);
+        scheduleNextFetch();
     }
 }
 
 function stopFetching() {
-    if (globals.fetchInterval) clearInterval(globals.fetchInterval);
+    if (globals.fetchTimeout) {
+        clearTimeout(globals.fetchTimeout);
+        globals.fetchTimeout = null;
+    }
 }
 
 // --- Auth Flows ---
