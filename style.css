@@ -179,7 +179,7 @@ body {
 
 /* Settings Panel */
 #settings-panel {
-    padding: 20px;
+    padding: 20px 20px 12px 20px;
 }
 
 .panel-header {
