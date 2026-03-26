@@ -181,6 +181,17 @@ function handleAuthSuccess() {
 
 dom.loginBtn.addEventListener('click', login);
 dom.logoutBtn.addEventListener('click', handleLogout);
+
+dom.refreshStatsBtn.addEventListener('click', async () => {
+    if (dom.refreshStatsBtn.disabled || !state.channelId) return;
+    dom.refreshStatsBtn.disabled = true;
+    dom.refreshStatsBtn.classList.add('refreshing');
+    await fetchChzzkData();
+    setTimeout(() => {
+        dom.refreshStatsBtn.disabled = false;
+        dom.refreshStatsBtn.classList.remove('refreshing');
+    }, 5000);
+});
 setupAuthListener(handleAuthSuccess);
 
 dom.saveSettingsBtn.addEventListener('click', async () => {

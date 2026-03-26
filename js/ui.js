@@ -17,7 +17,8 @@ export const dom = {
     selectedCategoryDisplay: document.getElementById('selected-category-display'),
     selectedCategoryName: document.getElementById('selected-category-name'),
     liveTitleInput: document.getElementById('live-title-input'),
-    liveTagsInput: document.getElementById('live-tags-input')
+    liveTagsInput: document.getElementById('live-tags-input'),
+    refreshStatsBtn: document.getElementById('refresh-stats-btn')
 };
 
 export function updateUi(state, customErrorMsg) {
