@@ -1,24 +1,28 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chzzk Live Dock</title>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div class="background-glow"></div>
     <div id="main-container">
-        
+
         <div id="auth-section" class="glass-panel">
             <div class="auth-header">
-                <svg class="auth-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="var(--chzzk-green)"/>
-                    <path d="M2 17L12 22L22 17M2 12L12 17L22 12" stroke="var(--chzzk-green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <svg class="auth-icon" width="40" height="40" viewBox="0 0 24 24" fill="none"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="var(--chzzk-green)" />
+                    <path d="M2 17L12 22L22 17M2 12L12 17L22 12" stroke="var(--chzzk-green)" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
                 <h2>Chzzk Live Dock</h2>
             </div>
-            <p class="auth-desc">방송 정보와 귀중한 통계를 보려면<br/>치지직 계정 연동과 승인이 필요합니다.</p>
+            <p class="auth-desc">방송 정보와 귀중한 통계를 보려면<br />치지직 계정 연동과 승인이 필요합니다.</p>
             <button id="chzzk-login-btn" class="chzzk-btn chzzk-btn-glow">치지직 계정 연동하기</button>
         </div>
 
@@ -26,7 +30,7 @@
             <div class="dashboard-header">
                 <div class="header-title">
                     <span class="status-dot"></span>
-                    <span id="header-channel-name">방송 관리 대시보드</span>
+                    <span id="header-channel-name">Chzzk Live Dock</span>
                 </div>
             </div>
 
@@ -47,10 +51,11 @@
                 </div>
                 <div class="setting-item" style="position: relative;">
                     <label for="category-search-input">카테고리 검색</label>
-                    <input type="text" id="category-search-input" class="modern-input" placeholder="검색어 입력 후 대기 (예: 원신)">
+                    <input type="text" id="category-search-input" class="modern-input"
+                        placeholder="검색어 입력 후 대기 (예: 원신)">
                     <div id="category-search-results" class="autocomplete-dropdown" style="display: none;"></div>
                     <input type="hidden" id="live-category-id" value="">
-                    
+
                     <div id="selected-category-display" class="selected-badge" style="display: none;">
                         <span class="badge-dot"></span><span id="selected-category-name"></span>
                     </div>
@@ -59,7 +64,7 @@
                     <label for="live-tags-input">태그 (쉼표로 구분)</label>
                     <input type="text" id="live-tags-input" class="modern-input" placeholder="예: 소통, 종합게임, 신작">
                 </div>
-                
+
                 <div class="action-buttons">
                     <button id="save-live-settings" class="chzzk-btn">설정 즉시 업데이트</button>
                 </div>
@@ -92,4 +97,5 @@
 
     <script type="module" src="js/main.js"></script>
 </body>
+
 </html>
