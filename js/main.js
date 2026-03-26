@@ -13,7 +13,7 @@ function getJitteredInterval() {
 
 // --- Core Data Fetching ---
 
-async function fetchChzzkData() {
+async function fetchChzzkData(force = false) {
     if (!state.channelId) {
         updateUi(state);
         return;
@@ -22,7 +22,7 @@ async function fetchChzzkData() {
     const previousStatus = state.liveStatus;
 
     try {
-        const result = await fetchLiveStatus(state.channelId);
+        const result = await fetchLiveStatus(state.channelId, force);
         const data = result.data;
         state.dataSource = result.source; // 'server' | 'local-cache'
 
@@ -186,7 +186,7 @@ dom.refreshStatsBtn.addEventListener('click', async () => {
     if (dom.refreshStatsBtn.disabled || !state.channelId) return;
     dom.refreshStatsBtn.disabled = true;
     dom.refreshStatsBtn.classList.add('refreshing');
-    await fetchChzzkData();
+    await fetchChzzkData(true);
     setTimeout(() => {
         dom.refreshStatsBtn.disabled = false;
         dom.refreshStatsBtn.classList.remove('refreshing');

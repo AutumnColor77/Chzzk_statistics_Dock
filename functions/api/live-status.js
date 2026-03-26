@@ -44,6 +44,7 @@ export async function onRequest(context) {
   const requestUrl = new URL(context.request.url);
   const { searchParams } = requestUrl;
   const channelId = searchParams.get('channelId');
+  const force = searchParams.get('force') === 'true';
   const allowedOrigin = context.env.ALLOWED_ORIGIN || requestUrl.origin;
 
   if (!channelId) {
@@ -67,26 +68,30 @@ export async function onRequest(context) {
   const now = Date.now();
 
   try {
-    const cached = await kv.get(cacheKey, { type: 'json' });
+    // force 파라미터가 있으면 캐시 조회를 건너뜀
+    if (!force) {
+      const cached = await kv.get(cacheKey, { type: 'json' });
 
-    if (cached && cached.timestamp) {
-      const age = now - cached.timestamp;
+      if (cached && cached.timestamp) {
+        const age = now - cached.timestamp;
 
-      // FRESH: 25초 이내 → 즉시 반환
-      if (age < FRESH_DURATION_MS) {
-        return createJsonResponse(cached.data, 'HIT', allowedOrigin);
-      }
+        // FRESH: 25초 이내 → 즉시 반환
+        if (age < FRESH_DURATION_MS) {
+          return createJsonResponse(cached.data, 'HIT', allowedOrigin);
+        }
 
-      // STALE: 25~60초 → 즉시 반환 + 백그라운드 갱신
-      if (age < STALE_DURATION_MS) {
-        context.waitUntil(refreshCache(kv, cacheKey, channelId));
-        return createJsonResponse(cached.data, 'STALE', allowedOrigin);
+        // STALE: 25~60초 → 즉시 반환 + 백그라운드 갱신
+        if (age < STALE_DURATION_MS) {
+          context.waitUntil(refreshCache(kv, cacheKey, channelId));
+          return createJsonResponse(cached.data, 'STALE', allowedOrigin);
+        }
       }
     }
 
-    // MISS 또는 EXPIRED → 동기적 origin fetch
+    // MISS, EXPIRED 또는 FORCE REFRESH → 동기적 origin fetch
     const freshData = await fetchFromOrigin(channelId);
     const cacheEntry = { data: freshData, timestamp: Date.now() };
+    const cacheStatus = force ? 'FORCE' : 'MISS';
     context.waitUntil(
       kv.put(cacheKey, JSON.stringify(cacheEntry), { expirationTtl: KV_TTL_SECONDS })
     );
