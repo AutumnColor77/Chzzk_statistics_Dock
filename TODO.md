@@ -1,6 +1,6 @@
 # Todo
 
-- **방송 설정(방제/카테고리/태그) 조회 및 변경 독**
+- **Chzzk Live Dock: 방송 설정(방제/카테고리/태그) 조회 및 변경 독**
   - **1. 인증 구현 (OAuth 2.0 방식)**
     - 사용자를 인증 페이지로 보내 `Authorization Code` 받기.
     - `Authorization Code`를 사용하여 `Access Token` 및 `Refresh Token` 발급받기.

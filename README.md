@@ -32,7 +32,7 @@ Cloudflare Pages Functions를 통해 API 키를 안전하게 서버에서 처리
 ### 2단계: GitHub에 레포지토리 Fork 또는 Clone
 
 ```bash
-git clone https://github.com/AutumnColor77/Chzzk_statistics_Dock.git
+git clone https://github.com/AutumnColor77/Chzzk-Live-Dock.git
 ```
 
 이 레포지토리를 여러분의 GitHub 계정에 Fork하거나, 직접 새 레포지토리로 Push합니다.
@@ -82,7 +82,7 @@ https://[배포된-도메인]/api/auth/callback
 ## 🗂️ 프로젝트 구조
 
 ```
-Chzzk_statistics_Dock/
+Chzzk-Live-Dock/
 ├── index.html                  # 메인 페이지
 ├── style.css                   # 스타일시트
 ├── js/                         # 클라이언트 JS 모듈
