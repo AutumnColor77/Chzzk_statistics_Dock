@@ -8,6 +8,7 @@ export const state = {
     followers: 0,
     averageViewers: 0,
     viewerHistory: [],
+    dataSource: 'server', // 'server' | 'local-cache' | 'error'
 };
 
 export const globals = {

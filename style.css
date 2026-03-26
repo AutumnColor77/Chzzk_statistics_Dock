@@ -180,6 +180,24 @@ body {
     background-color: var(--chzzk-green);
     border-radius: 50%;
     box-shadow: 0 0 8px var(--chzzk-green);
+    transition: all 0.4s ease;
+}
+
+.status-dot--cached {
+    background-color: #ffaa00;
+    box-shadow: 0 0 8px rgba(255, 170, 0, 0.6);
+    animation: pulse-warning 2s ease-in-out infinite;
+}
+
+.status-dot--error {
+    background-color: #ff4d4f;
+    box-shadow: 0 0 8px rgba(255, 77, 79, 0.6);
+    animation: pulse-warning 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-warning {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
 }
 
 /* Settings Panel */

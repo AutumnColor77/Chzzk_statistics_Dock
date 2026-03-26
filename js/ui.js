@@ -8,6 +8,8 @@ export const dom = {
     saveSettingsBtn: document.getElementById('save-live-settings'),
     logoutBtn: document.getElementById('chzzk-logout-btn'),
     statusMsg: document.getElementById('settings-status-msg'),
+    statusDot: document.querySelector('.status-dot'),
+    headerChannelName: document.getElementById('header-channel-name'),
     categorySearchInput: document.getElementById('category-search-input'),
     categorySearchResults: document.getElementById('category-search-results'),
     categoryTypeSelect: document.getElementById('live-category-type'),
@@ -43,6 +45,25 @@ export function updateUi(state, customErrorMsg) {
             valueEl.textContent = items[key];
         }
     });
+
+    // 데이터 출처에 따라 상태 인디케이터 업데이트
+    updateDataSourceIndicator(state.dataSource);
+}
+
+function updateDataSourceIndicator(source) {
+    if (!dom.statusDot) return;
+
+    // 기본 상태로 리셋
+    dom.statusDot.classList.remove('status-dot--cached', 'status-dot--error');
+    dom.statusDot.title = '';
+
+    if (source === 'local-cache') {
+        dom.statusDot.classList.add('status-dot--cached');
+        dom.statusDot.title = '서버 연결 불안정 — 로컬 캐시 데이터 표시 중';
+    } else if (source === 'error') {
+        dom.statusDot.classList.add('status-dot--error');
+        dom.statusDot.title = '서버 연결 실패';
+    }
 }
 
 export function updateAuthUi(hasToken, state) {

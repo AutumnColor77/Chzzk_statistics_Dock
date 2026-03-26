@@ -22,7 +22,10 @@ async function fetchChzzkData() {
     const previousStatus = state.liveStatus;
 
     try {
-        const data = await fetchLiveStatus(state.channelId);
+        const result = await fetchLiveStatus(state.channelId);
+        const data = result.data;
+        state.dataSource = result.source; // 'server' | 'local-cache'
+
         if (data.code === 200) {
             const content = data.content || {};
             state.liveStatus = content.status || 'CLOSE';
@@ -44,6 +47,7 @@ async function fetchChzzkData() {
         }
     } catch (_error) {
         state.liveStatus = 'CLOSE';
+        state.dataSource = 'error';
     }
 
     if (previousStatus === 'OPEN' && state.liveStatus === 'CLOSE') {
