@@ -22,5 +22,6 @@ export function setAccessToken(token) {
         localStorage.setItem('chzzkAccessToken', token);
     } else {
         localStorage.removeItem('chzzkAccessToken');
+        localStorage.removeItem('chzzkChannelId');
     }
 }

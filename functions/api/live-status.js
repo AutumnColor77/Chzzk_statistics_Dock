@@ -25,11 +25,11 @@ async function fetchFromOrigin(channelId) {
 /**
  * CORS 헤더와 캐시 상태를 포함한 JSON 응답을 생성합니다.
  */
-function createJsonResponse(data, cacheStatus) {
+function createJsonResponse(data, cacheStatus, allowedOrigin) {
   return new Response(JSON.stringify(data), {
     headers: {
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': allowedOrigin,
       'Cache-Control': 'no-store',
       'X-Cache': cacheStatus,
     },
@@ -37,18 +37,25 @@ function createJsonResponse(data, cacheStatus) {
 }
 
 export async function onRequest(context) {
-  const { searchParams } = new URL(context.request.url);
+  const requestUrl = new URL(context.request.url);
+  const { searchParams } = requestUrl;
   const channelId = searchParams.get('channelId');
+  const allowedOrigin = context.env.ALLOWED_ORIGIN || requestUrl.origin;
 
   if (!channelId) {
     return new Response('channelId query parameter is required', { status: 400 });
+  }
+
+  // channelId 형식 검증 (hex 문자열만 허용 — 경로 조작 방지)
+  if (!/^[a-f0-9]{10,64}$/i.test(channelId)) {
+    return new Response('Invalid channelId format', { status: 400 });
   }
 
   // KV 바인딩 확인 — 없으면 기존 로직(직접 fetch)으로 폴백
   const kv = context.env.LIVE_STATUS_CACHE;
   if (!kv) {
     const data = await fetchFromOrigin(channelId);
-    return createJsonResponse(data, 'BYPASS');
+    return createJsonResponse(data, 'BYPASS', allowedOrigin);
   }
 
   // --- Stale-While-Revalidate 패턴 ---
@@ -63,13 +70,13 @@ export async function onRequest(context) {
 
       // FRESH: 25초 이내 → 즉시 반환
       if (age < FRESH_DURATION_MS) {
-        return createJsonResponse(cached.data, 'HIT');
+        return createJsonResponse(cached.data, 'HIT', allowedOrigin);
       }
 
       // STALE: 25~60초 → 즉시 반환 + 백그라운드 갱신
       if (age < STALE_DURATION_MS) {
         context.waitUntil(refreshCache(kv, cacheKey, channelId));
-        return createJsonResponse(cached.data, 'STALE');
+        return createJsonResponse(cached.data, 'STALE', allowedOrigin);
       }
     }
 
@@ -80,13 +87,13 @@ export async function onRequest(context) {
       kv.put(cacheKey, JSON.stringify(cacheEntry), { expirationTtl: KV_TTL_SECONDS })
     );
 
-    return createJsonResponse(freshData, 'MISS');
+    return createJsonResponse(freshData, 'MISS', allowedOrigin);
 
   } catch (error) {
     // KV 오류 시에도 origin fallback
     try {
       const fallbackData = await fetchFromOrigin(channelId);
-      return createJsonResponse(fallbackData, 'ERROR');
+      return createJsonResponse(fallbackData, 'ERROR', allowedOrigin);
     } catch (originError) {
       return new Response(
         JSON.stringify({ code: 500, message: 'Both cache and origin failed' }),
@@ -94,7 +101,7 @@ export async function onRequest(context) {
           status: 502,
           headers: {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Origin': allowedOrigin,
           },
         }
       );

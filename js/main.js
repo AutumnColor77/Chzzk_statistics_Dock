@@ -155,8 +155,8 @@ async function loadAndShowSettings() {
     }
 }
 
-function handleLogout() {
-    logout();
+async function handleLogout() {
+    await logout();
     stopFetching();
     updateAuthUi(false, state);
 }

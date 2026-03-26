@@ -1,4 +1,5 @@
 import { setAccessToken } from './state.js';
+import { revokeToken } from './api.js';
 
 export function login() {
     const width = 500;
@@ -8,12 +9,14 @@ export function login() {
     window.open('/api/auth/login', 'ChzzkAuth', `width=${width},height=${height},top=${top},left=${left}`);
 }
 
-export function logout() {
+export async function logout() {
+    await revokeToken();
     setAccessToken(null);
 }
 
 export function setupAuthListener(onSuccess) {
     window.addEventListener('message', (event) => {
+        if (event.origin !== window.location.origin) return;
         if (event.data && event.data.type === 'CHZZK_AUTH_SUCCESS') {
             const tokenData = event.data.payload;
             setAccessToken(tokenData.accessToken);

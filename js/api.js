@@ -112,3 +112,15 @@ export async function searchCategories(query) {
     }
     throw new Error('Search failed');
 }
+
+export async function revokeToken() {
+    if (!globals.accessToken) return;
+    try {
+        await fetch('/api/auth/revoke', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${globals.accessToken}` }
+        });
+    } catch (_e) {
+        // revoke 실패해도 로컬 로그아웃은 진행
+    }
+}
