@@ -50,16 +50,6 @@ export async function fetchLiveStatus(channelId, force = false) {
     if (force) url += '&force=true';
 
     try {
-        // force일 때는 로컬 캐시 확인을 건너뜀
-        if (!force) {
-            const cachedData = loadFromLocalCache(channelId);
-            if (cachedData) {
-                // SWR 처럼 동작하도록 백그라운드 fetch는 생략 (상위 레벨 polling에서 처리됨)
-                // 하지만 force가 아닐 때도 네트워크 상태에 따라 유동적일 수 있으니 일단 cache 리턴
-                return { data: cachedData, source: 'local-cache', cacheStatus: 'LOCAL' };
-            }
-        }
-
         const response = await fetch(url);
 
         if (!response.ok) {
