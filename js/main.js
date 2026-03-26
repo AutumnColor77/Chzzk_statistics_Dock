@@ -28,10 +28,20 @@ async function fetchChzzkData() {
 
         if (data.code === 200) {
             const content = data.content || {};
-            state.liveStatus = content.status || 'CLOSE';
+            const newStatus = content.status || 'CLOSE';
+
+            // 방송이 새로 시작되면 peakViewers 초기화
+            if (newStatus === 'OPEN' && state.liveStatus !== 'OPEN') {
+                state.peakViewers = 0;
+            }
+
+            state.liveStatus = newStatus;
             if (state.liveStatus === 'OPEN') {
                 state.concurrentViewers = content.concurrentUserCount || 0;
-                state.peakViewers = content.accumulateCount || 0;
+                // 최고 동시 시청자: 현재 동시 시청자와 기존 최고값 비교
+                if (state.concurrentViewers > state.peakViewers) {
+                    state.peakViewers = state.concurrentViewers;
+                }
                 state.followers = content.followerCount || 0;
                 state.viewerHistory.push(state.concurrentViewers);
                 if (state.viewerHistory.length > MAX_HISTORY_LENGTH) {
