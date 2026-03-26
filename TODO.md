@@ -1,8 +1,5 @@
 # Todo
 
-- **현재 방송중인 시간 표시**
-  - `GET /polling/v2/channels/{channelId}/live-status` API의 `openDate` 값을 이용하여 구현.
-
 - **방송 설정(방제/카테고리/태그) 조회 및 변경 독**
   - **1. 인증 구현 (OAuth 2.0 방식)**
     - 사용자를 인증 페이지로 보내 `Authorization Code` 받기.
