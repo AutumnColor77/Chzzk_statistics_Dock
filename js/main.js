@@ -28,20 +28,16 @@ async function fetchChzzkData(force = false) {
 
         if (data.code === 200) {
             const content = data.content || {};
-            const newStatus = content.status || 'CLOSE';
+            state.liveStatus = content.status || 'CLOSE';
 
-            // 방송이 새로 시작되면 peakViewers 초기화
-            if (newStatus === 'OPEN' && state.liveStatus !== 'OPEN') {
-                state.peakViewers = 0;
-            }
-
-            state.liveStatus = newStatus;
             if (state.liveStatus === 'OPEN') {
                 state.concurrentViewers = content.concurrentUserCount || 0;
-                // 최고 동시 시청자: 현재 동시 시청자와 기존 최고값 비교
-                if (state.concurrentViewers > state.peakViewers) {
-                    state.peakViewers = state.concurrentViewers;
-                }
+
+                // 최고 동시 시청자: localStorage에서 복원 + 현재값 비교
+                const storedPeak = parseInt(localStorage.getItem('chzzk_peak_viewers') || '0', 10);
+                state.peakViewers = Math.max(state.peakViewers, storedPeak, state.concurrentViewers);
+                localStorage.setItem('chzzk_peak_viewers', state.peakViewers.toString());
+
                 state.followers = content.followerCount || 0;
                 state.viewerHistory.push(state.concurrentViewers);
                 if (state.viewerHistory.length > MAX_HISTORY_LENGTH) {
@@ -50,6 +46,7 @@ async function fetchChzzkData(force = false) {
             } else {
                 state.concurrentViewers = 0;
                 state.peakViewers = 0;
+                localStorage.removeItem('chzzk_peak_viewers');
                 state.followers = content.followerCount || state.followers;
             }
         } else {
