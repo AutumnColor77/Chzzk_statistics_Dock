@@ -37,6 +37,10 @@ function createJsonResponse(data, cacheStatus, allowedOrigin) {
 }
 
 export async function onRequest(context) {
+  if (context.request.method !== 'GET') {
+    return new Response('Method Not Allowed', { status: 405 });
+  }
+
   const requestUrl = new URL(context.request.url);
   const { searchParams } = requestUrl;
   const channelId = searchParams.get('channelId');

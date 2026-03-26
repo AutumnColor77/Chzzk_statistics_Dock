@@ -14,6 +14,7 @@
 - 🔒 **OAuth 2.0 로그인**: 치지직 공식 OAuth 인증 방식 사용
 - 👁️ **수치 가리기**: 각 수치 클릭 시 숨김/표시 전환 (스트리밍 중 화면 보호)
 - ⚡ **최적화된 아키텍처**: KV 캐싱, Jitter 폴링, LocalStorage 폴백 적용
+- 🛡️ **강화된 보안**: CSRF/XSS/SSRF 방어, HSTS/CSP 보안 헤더 적용, 토큰 세션 무효화(Revoke) 로직
 
 ---
 
@@ -63,7 +64,9 @@ git clone https://github.com/AutumnColor77/Chzzk-Live-Dock.git
 
 ### 5단계: 환경 변수 설정
 1. Pages 프로젝트 → **Settings** → **Environment variables** 탭으로 이동합니다.
-2. `CHZZK_CLIENT_ID`와 `CHZZK_CLIENT_SECRET`을 추가하고 **재배포(Redeploy)**합니다.
+2. `CHZZK_CLIENT_ID`와 `CHZZK_CLIENT_SECRET`을 추가합니다.
+3. (선택) `ALLOWED_ORIGIN`에 본인의 배포 도메인(예: `https://your-app.pages.dev`)을 입력하여 CORS 오리진을 제한합니다. (미설정 시 현재 도메인 자동 사용)
+4. 모든 설정을 마친 후 **재배포(Redeploy)**합니다.
 
 ### 6단계: 치지직 앱 Redirect URI 수정
 [치지직 개발자 센터]에서 Redirect URI를 아래 형식으로 수정합니다.
@@ -76,15 +79,19 @@ git clone https://github.com/AutumnColor77/Chzzk-Live-Dock.git
 ```
 Chzzk-Live-Dock/
 ├── index.html                  # 메인 페이지
-├── style.css                   # 스타일시트 (경고 펄스 애니메이션 포함)
+├── style.css                   # 스타일시트
 ├── wrangler.toml               # Cloudflare Pages 설정 및 KV 바인딩 안내
+├── _headers                    # 보안 헤더 설정 (CSP, HSTS, X-Frame-Options 등)
 ├── js/                         # 클라이언트 JS 모듈
-│   ├── main.js                 # 진입점 (Jitter 폴링 로직)
-│   ├── api.js                  # API 통신 (LocalStorage 폴백 로직)
-│   ├── state.js                # 전역 상태 (dataSource 추적)
-│   └── ...
+│   ├── main.js                 # 진입점 (Jitter 폴링 및 상태 관리)
+│   ├── api.js                  # API 통신 (LocalStorage 폴백 & Revoke)
+│   ├── auth.js                 # OAuth 팝업 및 메시지 리스너 (Origin 검증)
+│   └── state.js                # 전역 상태 (dataSource 및 토큰 관리)
 └── functions/api/              # Cloudflare Pages Functions
-    └── live-status.js          # 라이브 상태 조회 (KV SWR 캐싱 로직)
+    ├── live-status.js          # 라이브 상태 조회 (KV SWR 캐싱 & SSRF 방어)
+    ├── lives/setting.js        # 방송 설정 변경 (입력값 화이트리스트 검증)
+    ├── auth/callback.js        # OAuth 콜백 (XSS 방어 및 CSRF state 검증)
+    └── auth/revoke.js          # 토큰 무효화 API
 ```
 
 ---

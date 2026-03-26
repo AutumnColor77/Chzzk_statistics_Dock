@@ -45,6 +45,7 @@ export async function onRequest(context) {
   newResponse.headers.set('Access-Control-Allow-Origin', allowedOrigin);
   newResponse.headers.set('Access-Control-Allow-Methods', 'GET, PATCH, OPTIONS');
   newResponse.headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  newResponse.headers.set('Cache-Control', 'no-store');
   return newResponse;
 }
 
