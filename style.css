@@ -410,6 +410,10 @@ select.modern-input {
     color: #ff4d4f;
 }
 
+.info-msg {
+    color: #58a6ff;
+}
+
 /* Refresh Button */
 .refresh-btn {
     display: flex;

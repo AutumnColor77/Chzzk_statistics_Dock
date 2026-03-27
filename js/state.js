@@ -13,6 +13,7 @@ export const state = {
 
 export const globals = {
     fetchTimeout: null,
+    settingsPollingTimeout: null,
     accessToken: localStorage.getItem('chzzkAccessToken')
 };
 
