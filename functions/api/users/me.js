@@ -1,14 +1,25 @@
+import {
+  checkRateLimit,
+  getSession,
+  logSecurityEvent,
+  requireAllowedMethods,
+  withNoStore
+} from '../../_lib/security.js';
+
 export async function onRequest(context) {
   const { request, env } = context;
   const allowedOrigin = env.ALLOWED_ORIGIN || new URL(request.url).origin;
-  
-  if (request.method !== 'GET') {
-    return new Response('Method Not Allowed', { status: 405 });
-  }
+  const methodErr = requireAllowedMethods(request, ['GET']);
+  if (methodErr) return methodErr;
 
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader) {
-    return new Response('Missing Authorization header', { status: 401 });
+  const limit = await checkRateLimit(env, request, 'users_me', 120, 60);
+  if (!limit.allowed) return new Response('Too Many Requests', { status: 429 });
+
+  const session = await getSession(env, request);
+  const accessToken = session?.data?.accessToken;
+  if (!accessToken) {
+    logSecurityEvent('session_missing_users_me', { url: request.url });
+    return new Response('Unauthorized', { status: 401 });
   }
 
   const apiUrl = 'https://openapi.chzzk.naver.com/open/v1/users/me';
@@ -16,7 +27,7 @@ export async function onRequest(context) {
   const response = await fetch(apiUrl, {
     method: 'GET',
     headers: {
-      'Authorization': authHeader,
+      'Authorization': `Bearer ${accessToken}`,
       'Accept': 'application/json'
     }
   });
@@ -24,8 +35,8 @@ export async function onRequest(context) {
   const newResponse = new Response(response.body, response);
   newResponse.headers.set('Access-Control-Allow-Origin', allowedOrigin);
   newResponse.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  newResponse.headers.set('Access-Control-Allow-Headers', 'Authorization');
-  newResponse.headers.set('Cache-Control', 'no-store');
+  newResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type, X-CSRF-Token');
+  withNoStore(newResponse.headers);
   return newResponse;
 }
 
@@ -36,7 +47,7 @@ export async function onRequestOptions(context) {
     headers: {
       'Access-Control-Allow-Origin': allowedOrigin,
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Authorization'
+      'Access-Control-Allow-Headers': 'Content-Type, X-CSRF-Token'
     }
   });
 }

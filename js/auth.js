@@ -1,4 +1,4 @@
-import { setAccessToken } from './state.js';
+import { clearLocalSessionState } from './state.js';
 import { revokeToken } from './api.js';
 
 export function login() {
@@ -11,15 +11,13 @@ export function login() {
 
 export async function logout() {
     await revokeToken();
-    setAccessToken(null);
+    clearLocalSessionState();
 }
 
 export function setupAuthListener(onSuccess) {
     window.addEventListener('message', (event) => {
         if (event.origin !== window.location.origin) return;
         if (event.data && event.data.type === 'CHZZK_AUTH_SUCCESS') {
-            const tokenData = event.data.payload;
-            setAccessToken(tokenData.accessToken);
             onSuccess();
         }
     });

@@ -1,8 +1,12 @@
-import { globals } from './state.js';
-
 // --- LocalStorage Cache for Live Status ---
 const LOCAL_CACHE_KEY = 'chzzk_live_status_cache';
 const LOCAL_CACHE_MAX_AGE_MS = 120 * 1000; // 로컬 캐시 유효 기간: 2분
+
+function getCookie(name) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = document.cookie.match(new RegExp(`(?:^|; )${escaped}=([^;]*)`));
+    return match ? decodeURIComponent(match[1]) : '';
+}
 
 /**
  * 라이브 상태 데이터를 LocalStorage에 캐싱합니다.
@@ -77,32 +81,23 @@ export async function fetchLiveStatus(channelId, force = false) {
 }
 
 export async function fetchUserChannel() {
-    if (!globals.accessToken) throw new Error('No access token');
-    const response = await fetch('/api/users/me', {
-        headers: { 'Authorization': `Bearer ${globals.accessToken}` }
-    });
-    return response;
+    return fetch('/api/users/me');
 }
 
 export async function fetchLiveSettings() {
-    if (!globals.accessToken) throw new Error('No access token');
-    const response = await fetch('/api/lives/setting', {
-        headers: { 'Authorization': `Bearer ${globals.accessToken}` }
-    });
-    return response;
+    return fetch('/api/lives/setting');
 }
 
 export async function updateLiveSettings(body) {
-    if (!globals.accessToken) throw new Error('No access token');
-    const response = await fetch('/api/lives/setting', {
+    const csrfToken = getCookie('chzzk_csrf');
+    return fetch('/api/lives/setting', {
         method: 'PATCH',
         headers: { 
-            'Authorization': `Bearer ${globals.accessToken}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken
         },
         body: JSON.stringify(body)
     });
-    return response;
 }
 
 export async function searchCategories(query) {
@@ -115,11 +110,11 @@ export async function searchCategories(query) {
 }
 
 export async function revokeToken() {
-    if (!globals.accessToken) return;
+    const csrfToken = getCookie('chzzk_csrf');
     try {
         await fetch('/api/auth/revoke', {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${globals.accessToken}` }
+            headers: { 'X-CSRF-Token': csrfToken }
         });
     } catch (_e) {
         // revoke 실패해도 로컬 로그아웃은 진행

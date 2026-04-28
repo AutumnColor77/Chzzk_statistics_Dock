@@ -1,14 +1,23 @@
+import {
+  checkRateLimit,
+  clearSessionCookies,
+  deleteSession,
+  getSession,
+  logSecurityEvent,
+  requireAllowedMethods,
+  validateCsrf,
+  withNoStore
+} from '../../_lib/security.js';
+
 export async function onRequest(context) {
   const { request, env } = context;
+  const allowedOrigin = env.ALLOWED_ORIGIN || new URL(request.url).origin;
 
-  if (request.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405 });
-  }
+  const methodErr = requireAllowedMethods(request, ['POST']);
+  if (methodErr) return methodErr;
 
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader) {
-    return new Response('Missing Authorization header', { status: 401 });
-  }
+  const limit = await checkRateLimit(env, request, 'auth_revoke', 20, 60);
+  if (!limit.allowed) return new Response('Too Many Requests', { status: 429 });
 
   const clientId = env.CHZZK_CLIENT_ID;
   const clientSecret = env.CHZZK_CLIENT_SECRET;
@@ -17,47 +26,49 @@ export async function onRequest(context) {
     return new Response('Server configuration missing', { status: 500 });
   }
 
-  // Bearer 토큰 추출
-  const token = authHeader.replace(/^Bearer\s+/i, '');
+  const session = await getSession(env, request);
+  const token = session?.data?.accessToken;
+  const headers = new Headers({
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': allowedOrigin
+  });
+  withNoStore(headers);
+
+  if (session?.data && !validateCsrf(request, session.data)) {
+    logSecurityEvent('csrf_validation_failed_revoke', { url: request.url });
+    return new Response(JSON.stringify({ success: false, message: 'Invalid CSRF token' }), {
+      status: 403,
+      headers
+    });
+  }
 
   try {
-    const revokeResponse = await fetch('https://openapi.chzzk.naver.com/auth/v1/token/revoke', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        clientId: clientId,
-        clientSecret: clientSecret,
-        token: token,
-      }),
-    });
-
-    const allowedOrigin = env.ALLOWED_ORIGIN || new URL(request.url).origin;
-
-    if (revokeResponse.ok) {
-      return new Response(JSON.stringify({ success: true }), {
+    if (token) {
+      const revokeResponse = await fetch('https://openapi.chzzk.naver.com/auth/v1/token/revoke', {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': allowedOrigin,
         },
+        body: JSON.stringify({
+          clientId: clientId,
+          clientSecret: clientSecret,
+          token: token,
+        }),
       });
-    } else {
-      return new Response(JSON.stringify({ success: false, message: 'Token revocation failed' }), {
-        status: revokeResponse.status,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': allowedOrigin,
-        },
-      });
+      if (!revokeResponse.ok) {
+        logSecurityEvent('token_revoke_failed', { status: revokeResponse.status });
+      }
     }
+
+    await deleteSession(env, request);
+    clearSessionCookies(headers);
+    return new Response(JSON.stringify({ success: true }), { headers });
   } catch (_error) {
+    logSecurityEvent('token_revoke_error', { url: request.url });
+    clearSessionCookies(headers);
     return new Response(JSON.stringify({ success: false, message: 'Server error' }), {
       status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN || new URL(request.url).origin,
-      },
+      headers,
     });
   }
 }
@@ -69,7 +80,7 @@ export async function onRequestOptions(context) {
     headers: {
       'Access-Control-Allow-Origin': allowedOrigin,
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, X-CSRF-Token',
     },
   });
 }

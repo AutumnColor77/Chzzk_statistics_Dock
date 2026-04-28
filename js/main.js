@@ -1,4 +1,4 @@
-import { state, globals, MAX_HISTORY_LENGTH, setAccessToken } from './state.js';
+import { state, globals, MAX_HISTORY_LENGTH } from './state.js';
 import { fetchLiveStatus, fetchUserChannel, fetchLiveSettings, updateLiveSettings, searchCategories } from './api.js';
 import { login, logout, setupAuthListener } from './auth.js';
 import { dom, updateUi, updateAuthUi, renderCategoryResults, setupHideValuesFeature } from './ui.js';
@@ -107,20 +107,21 @@ function stopFetching() {
 // --- Auth Flows ---
 
 async function handleLogin() {
-    if (!globals.accessToken) return;
     try {
         const response = await fetchUserChannel();
         if (response.ok) {
             const data = await response.json();
             if (data.content && data.content.channelId) {
+                updateAuthUi(true, state);
                 state.channelId = data.content.channelId;
                 localStorage.setItem('chzzkChannelId', state.channelId);
                 startFetching();
+                loadAndShowSettings().then(() => startSettingsPolling());
             } else {
                 updateUi(state, '채널 정보 없음');
             }
         } else if (response.status === 401) {
-            handleLogout();
+            updateAuthUi(false, state);
         } else if (response.status === 403) {
             updateUi(state, '권한 부족 (유저정보)');
             dom.statusMsg.textContent = '앱 설정에서 유저 정보 조회 권한을 추가해주세요.';
@@ -134,7 +135,6 @@ async function handleLogin() {
 }
 
 async function loadAndShowSettings() {
-    if (!globals.accessToken) return;
     try {
         const response = await fetchLiveSettings();
         if (response.status === 401) { handleLogout(); return; }
@@ -205,8 +205,6 @@ function isSettingsInputFocused() {
  * 사용자가 입력 필드를 편집 중이면 갱신을 건너뜁니다.
  */
 async function pollSettingsIfChanged() {
-    if (!globals.accessToken) return;
-
     // 편집 중이면 이번 사이클은 건너뜀
     if (isSettingsInputFocused()) return;
 
@@ -257,8 +255,6 @@ async function handleLogout() {
 }
 
 function handleAuthSuccess() {
-    updateAuthUi(true, state);
-    loadAndShowSettings().then(() => startSettingsPolling());
     handleLogin();
 }
 
@@ -280,8 +276,6 @@ dom.refreshStatsBtn.addEventListener('click', async () => {
 setupAuthListener(handleAuthSuccess);
 
 dom.saveSettingsBtn.addEventListener('click', async () => {
-    if (!globals.accessToken) return;
-
     const title = dom.liveTitleInput.value.trim();
     const categoryType = dom.categoryTypeSelect.value;
     const categoryId = dom.liveCategoryIdInput.value.trim();
@@ -362,19 +356,14 @@ function initialize() {
         state.channelId = savedId;
     }
 
-    updateAuthUi(!!globals.accessToken, state);
-
-    if (globals.accessToken) {
-        loadAndShowSettings().then(() => startSettingsPolling());
-        handleLogin();
-    }
+    updateAuthUi(false, state);
+    handleLogin();
 }
 
 // --- Settings Polling ---
 
 function startSettingsPolling() {
     stopSettingsPolling();
-    if (!globals.accessToken) return;
 
     globals.settingsPollingTimeout = setInterval(() => {
         pollSettingsIfChanged();
