@@ -37,8 +37,13 @@ export async function onRequest(context) {
   const tokenData = await tokenResponse.json();
 
   if (tokenResponse.ok && tokenData.content && tokenData.content.accessToken) {
+    // 클라이언트에는 실제로 필요한 accessToken만 전달 (불필요한 토큰 노출 최소화)
+    const minimalTokenData = {
+      accessToken: tokenData.content.accessToken
+    };
+
     // JSON 데이터를 HTML 속성에 안전하게 삽입하기 위해 HTML 엔티티로 이스케이프
-    const safeJson = JSON.stringify(tokenData.content)
+    const safeJson = JSON.stringify(minimalTokenData)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
@@ -68,7 +73,10 @@ export async function onRequest(context) {
     return new Response(html, {
       headers: {
         'Content-Type': 'text/html;charset=UTF-8',
-        'Set-Cookie': 'oauth_state=; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=0'
+        'Set-Cookie': 'oauth_state=; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=0',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       }
     });
   } else {

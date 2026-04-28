@@ -112,6 +112,18 @@ body {
     margin-bottom: 24px;
 }
 
+.auth-notice {
+    margin-top: -12px;
+    margin-bottom: 18px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #c9d1d9;
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.22);
+}
+
 /* Buttons */
 .chzzk-btn {
     background-color: var(--chzzk-green);
