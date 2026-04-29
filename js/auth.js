@@ -6,7 +6,7 @@ export function login() {
     const height = 600;
     const left = (window.innerWidth / 2) - (width / 2);
     const top = (window.innerHeight / 2) - (height / 2);
-    window.open('/api/auth/login', 'ChzzkAuth', `width=${width},height=${height},top=${top},left=${left}`);
+    window.open('/api/auth/login', 'CheeseStickDockAuth', `width=${width},height=${height},top=${top},left=${left}`);
 }
 
 export async function logout() {

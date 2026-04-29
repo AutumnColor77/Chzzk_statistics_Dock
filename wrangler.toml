@@ -1,7 +1,7 @@
-# Cloudflare Pages 프로젝트 설정
+# Cheese Stick Dock — Cloudflare Pages 프로젝트 설정
 # 자세한 내용: https://developers.cloudflare.com/pages/functions/bindings/#kv-namespaces
 
-name = "chzzk-statistics-dock"
+name = "cheese-stick-dock"
 compatibility_date = "2024-01-01"
 
 # KV Namespace 바인딩

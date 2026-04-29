@@ -1,3 +1,7 @@
+# Cheese Stick Dock Release Notes
+
+제품 소개 문구: **Cheese Stick Dock**은 치지직 스트리머를 위한 설정 관리 & 방송 통계 독(Dock) 애플리케이션입니다.
+
 ## v0.3.1
 
 배포일: 2026-04-28

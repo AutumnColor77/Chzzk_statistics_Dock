@@ -77,7 +77,7 @@ export async function onRequest(context) {
             window.close();
           } else {
             document.body.innerHTML += '<p>Please close this window and return to the application.</p>';
-            document.body.innerHTML += '<p><a href="/">Go back to Chzzk Live Dock</a></p>';
+            document.body.innerHTML += '<p><a href="/">Go back to Cheese Stick Dock</a></p>';
             setTimeout(function () {
               window.location.replace('/');
             }, 1200);

@@ -1,8 +1,8 @@
-# Chzzk Live Dock
+# Cheese Stick Dock
 
 현재 버전: **v0.3.1**
 
-치지직 스트리머를 위한 방송 통계 & 설정 관리 독(Dock) 애플리케이션입니다.  
+**Cheese Stick Dock**은 치지직 스트리머를 위한 설정 관리 & 방송 통계 독(Dock) 애플리케이션입니다.  
 동시 시청자 수, 최고/평균 시청자, 팔로워를 실시간으로 표시하고, 방송 제목/카테고리/태그를 방송 중에도 손쉽게 변경할 수 있습니다.
 
 특히 **고가용성 아키텍처 리팩토링**을 통해 많은 클라이언트가 접속하더라도 안정적인 서비스 제공이 가능하도록 최적화되었습니다.
@@ -11,8 +11,8 @@
 
 ## ✨ 주요 기능
 
-- 📊 **실시간 통계**: 동시 시청자 수 / 최고 시청자 / 평균 시청자 / 팔로워
 - ✏️ **방송 설정 변경**: 방송 제목, 카테고리(자동완성 검색), 태그를 실시간으로 수정 가능
+- 📊 **실시간 통계**: 동시 시청자 수 / 최고 시청자 / 평균 시청자 / 팔로워
 - 🔒 **OAuth 2.0 로그인**: 치지직 공식 OAuth 인증 방식 사용
 - 👁️ **수치 가리기**: 각 수치 클릭 시 숨김/표시 전환 (스트리밍 중 화면 보호)
 - ⚡ **최적화된 아키텍처**: KV 캐싱, Jitter 폴링, LocalStorage 폴백 적용
@@ -74,7 +74,7 @@
 
 ### 2단계: GitHub에 레포지토리 Fork 또는 Clone
 ```bash
-git clone https://github.com/AutumnColor77/Chzzk-Live-Dock.git
+git clone https://github.com/<your-github-id>/cheese-stick-dock.git
 ```
 
 ### 3단계: Cloudflare Pages 프로젝트 생성
@@ -97,14 +97,14 @@ git clone https://github.com/AutumnColor77/Chzzk-Live-Dock.git
 
 ### 6단계: 치지직 앱 Redirect URI 수정
 [치지직 개발자 센터]에서 Redirect URI를 아래 형식으로 수정합니다.
-`https://[배포된-도메인]/api/auth/callback`
+`https://your-app.pages.dev/api/auth/callback`
 
 ---
 
 ## 🗂️ 프로젝트 구조
 
 ```
-Chzzk-Live-Dock/
+Cheese-Stick-Dock/
 ├── index.html                  # 메인 페이지
 ├── style.css                   # 스타일시트
 ├── wrangler.toml               # Cloudflare Pages 설정 및 KV 바인딩 안내

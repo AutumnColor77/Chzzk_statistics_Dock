@@ -11,7 +11,7 @@ async function fetchFromOrigin(channelId) {
   const response = await fetch(apiUrl, {
     headers: {
       'Accept': 'application/json',
-      'User-Agent': 'chzzk-viewer-dock/1.0',
+      'User-Agent': 'cheese-stick-dock/1.0',
     },
   });
 

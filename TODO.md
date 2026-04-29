@@ -1,4 +1,4 @@
-# Todo
+# Cheese Stick Dock Todo
 
 - [x] **1. 인증 구현 (OAuth 2.0 방식)**
   - [x] 사용자를 인증 페이지로 보내 `Authorization Code` 받기.
