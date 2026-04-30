@@ -9,6 +9,7 @@ export const dom = {
     logoutBtn: document.getElementById('chzzk-logout-btn'),
     statusMsg: document.getElementById('settings-status-msg'),
     statusDot: document.querySelector('.status-dot'),
+    headerLogo: document.querySelector('.header-logo'),
     headerChannelName: document.getElementById('header-channel-name'),
     categorySearchInput: document.getElementById('category-search-input'),
     categorySearchResults: document.getElementById('category-search-results'),
@@ -19,6 +20,12 @@ export const dom = {
     liveTitleInput: document.getElementById('live-title-input'),
     liveTagsInput: document.getElementById('live-tags-input'),
     refreshStatsBtn: document.getElementById('refresh-stats-btn')
+};
+
+const HEADER_LOGO_BY_SOURCE = {
+    server: 'icon_green.png',
+    'local-cache': 'icon_orange.png',
+    error: 'icon_red.png'
 };
 
 export function updateUi(state, customErrorMsg) {
@@ -52,6 +59,10 @@ export function updateUi(state, customErrorMsg) {
 }
 
 function updateDataSourceIndicator(source) {
+    if (dom.headerLogo) {
+        dom.headerLogo.src = HEADER_LOGO_BY_SOURCE[source] || HEADER_LOGO_BY_SOURCE.server;
+    }
+
     if (!dom.statusDot) return;
 
     // 기본 상태로 리셋

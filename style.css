@@ -93,6 +93,10 @@ body {
 }
 
 .auth-icon {
+    display: block;
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
     filter: drop-shadow(0 0 12px var(--chzzk-glow));
     margin-bottom: 12px;
 }
@@ -181,6 +185,13 @@ body {
     gap: 8px;
     font-size: 16px;
     font-weight: 700;
+}
+
+.header-logo {
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+    flex-shrink: 0;
 }
 
 .status-dot {
