@@ -1,7 +1,14 @@
+import { checkRateLimit, logSecurityEvent } from '../_lib/security.js';
+
 // --- Configuration ---
 const FRESH_DURATION_MS = 25 * 1000;  // 25초: 캐시가 "신선"한 기간 (즉시 반환, 갱신 없음)
 const STALE_DURATION_MS = 60 * 1000;  // 60초: 이 기간 이후 캐시 완전 만료
 const KV_TTL_SECONDS = 120;           // KV 자동 만료 안전장치 (2분)
+
+/** 공개 URL 노출 시 IP당 라이브 상태 조회 상한 (분당, KV·오리진 보호) */
+const RATE_LIMIT_PER_IP_PER_MIN = 120;
+/** force=true는 캐시 우회·오리진 직접 호출이므로 더 엄격히 */
+const RATE_LIMIT_FORCE_PER_IP_PER_MIN = 30;
 
 /**
  * Origin API에서 라이브 상태를 가져옵니다.
@@ -36,6 +43,21 @@ function createJsonResponse(data, cacheStatus, allowedOrigin) {
   });
 }
 
+function jsonRateLimited(allowedOrigin) {
+  return new Response(
+    JSON.stringify({ code: 429, message: 'Too many requests. Try again later.' }),
+    {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': allowedOrigin,
+        'Cache-Control': 'no-store',
+        'Retry-After': '60',
+      },
+    }
+  );
+}
+
 export async function onRequest(context) {
   if (context.request.method !== 'GET') {
     return new Response('Method Not Allowed', { status: 405 });
@@ -46,6 +68,32 @@ export async function onRequest(context) {
   const channelId = searchParams.get('channelId');
   const force = searchParams.get('force') === 'true';
   const allowedOrigin = context.env.ALLOWED_ORIGIN || requestUrl.origin;
+
+  const limit = await checkRateLimit(
+    context.env,
+    context.request,
+    'live_status',
+    RATE_LIMIT_PER_IP_PER_MIN,
+    60
+  );
+  if (!limit.allowed) {
+    logSecurityEvent('rate_limit_live_status', { url: context.request.url });
+    return jsonRateLimited(allowedOrigin);
+  }
+
+  if (force) {
+    const forceLimit = await checkRateLimit(
+      context.env,
+      context.request,
+      'live_status_force',
+      RATE_LIMIT_FORCE_PER_IP_PER_MIN,
+      60
+    );
+    if (!forceLimit.allowed) {
+      logSecurityEvent('rate_limit_live_status_force', { url: context.request.url });
+      return jsonRateLimited(allowedOrigin);
+    }
+  }
 
   if (!channelId) {
     return new Response('channelId query parameter is required', { status: 400 });

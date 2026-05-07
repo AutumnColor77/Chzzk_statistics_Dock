@@ -13,6 +13,11 @@
   - [x] XSS, CSRF(state), SSRF(channelId) 방어 로직 적용.
   - [x] CSP, HSTS, X-Frame-Options 등 보안 헤더 설정.
   - [x] 토큰 무효화(Revoke) 기능 구현.
+  - [x] 공개 API 남용 완화: `GET /api/live-status`, `GET /api/categories/search`에 IP 기준 rate limiting(`checkRateLimit`, 분당 상한은 각 함수 파일 상단 상수).
+
+- [x] **3-1. 운영·UI (선택, 반영됨)**
+  - [x] 메인 페이지 하단 푸터에 운영 안내·투네이션 링크(`index.html`). Fork 시 본인 후원 URL로 `href` 수정.
+  - [x] README에 트래픽 제한·후원 링크 안내 반영(v0.3.2).
 
 - [ ] **4. 향후 과제**
   - [ ] **Refresh Token 자동 갱신**: Access Token 만료 전 백그라운드에서 갱신.

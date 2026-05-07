@@ -1,9 +1,27 @@
+import { checkRateLimit, logSecurityEvent } from '../../_lib/security.js';
+
+/** 카테고리 검색은 오픈 API 자격증명을 쓰므로 IP당 분당 상한 */
+const RATE_LIMIT_PER_IP_PER_MIN = 60;
+
 export async function onRequest(context) {
   const { request, env } = context;
   const allowedOrigin = env.ALLOWED_ORIGIN || new URL(request.url).origin;
-  
+
   if (request.method !== 'GET') {
     return new Response('Method Not Allowed', { status: 405 });
+  }
+
+  const limit = await checkRateLimit(env, request, 'categories_search', RATE_LIMIT_PER_IP_PER_MIN, 60);
+  if (!limit.allowed) {
+    logSecurityEvent('rate_limit_categories_search', { url: request.url });
+    return new Response(JSON.stringify({ code: 429, message: 'Too many requests' }), {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': allowedOrigin,
+        'Cache-Control': 'no-store',
+      },
+    });
   }
 
   const url = new URL(request.url);

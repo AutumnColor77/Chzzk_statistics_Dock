@@ -1,6 +1,6 @@
 # Cheese Stick Dock
 
-현재 버전: **v0.3.1**
+현재 버전: **v0.3.2**
 
 **Cheese Stick Dock**은 치지직 스트리머를 위한 설정 관리 & 방송 통계 독(Dock) 애플리케이션입니다.  
 동시 시청자 수, 최고/평균 시청자, 팔로워를 실시간으로 표시하고, 방송 제목/카테고리/태그를 방송 중에도 손쉽게 변경할 수 있습니다.
@@ -16,7 +16,7 @@
 - 🔒 **OAuth 2.0 로그인**: 치지직 공식 OAuth 인증 방식 사용
 - 👁️ **수치 가리기**: 각 수치 클릭 시 숨김/표시 전환 (스트리밍 중 화면 보호)
 - ⚡ **최적화된 아키텍처**: KV 캐싱, Jitter 폴링, LocalStorage 폴백 적용
-- 🛡️ **강화된 보안**: HttpOnly 세션 쿠키, CSRF/XSS/SSRF 방어, HSTS/CSP 보안 헤더, 세션 무효화(Revoke) 로직
+- 🛡️ **강화된 보안**: HttpOnly 세션 쿠키, CSRF/XSS/SSRF 방어, HSTS/CSP 보안 헤더, 세션 무효화(Revoke) 로직, 공개 API IP당 요청 제한(rate limiting)
 
 ---
 
@@ -46,6 +46,23 @@
 - OAuth 콜백 후 서버가 세션을 KV에 저장하고, 클라이언트에는 `HttpOnly + Secure + SameSite` 세션 쿠키만 전달합니다.
 - 상태 변경 API(`PATCH /api/lives/setting`, `POST /api/auth/revoke`)는 CSRF 토큰(`X-CSRF-Token`) 검증을 통과해야 합니다.
 - 인증/설정 엔드포인트는 `no-store` 캐시 정책 및 rate limiting(경량)을 적용합니다.
+- 공개로 노출되기 쉬운 `GET /api/live-status`, `GET /api/categories/search`에도 IP 기준 rate limiting을 적용하여 KV·오리진 호출 남용을 완화합니다. (상세는 아래 표)
+
+### 트래픽 제한 (공개 배포 시)
+
+저장소를 공개하거나 방문자가 많을 때 **동일 IP** 기준으로 요청 수를 제한합니다. 구현은 `functions/_lib/security.js`의 `checkRateLimit`(KV 키 접두사 `rl:`)을 사용합니다.
+
+| 엔드포인트 | 기준 (동일 IP, 60초 창) |
+|------------|-------------------------|
+| `GET /api/live-status` | 분당 120회 |
+| 위 요청 중 `force=true` | 추가로 분당 30회 (캐시 우회·오리진 직접 호출) |
+| `GET /api/categories/search` | 분당 60회 |
+
+초과 시 HTTP **429**와 JSON 오류 본문을 반환합니다. 통계 조회는 클라이언트가 최근 **로컬 캐시**(약 2분)로 폴백할 수 있습니다. 숫자는 `functions/api/live-status.js`, `functions/api/categories/search.js` 상단 상수에서 조정하면 됩니다.
+
+### 후원 링크 (선택)
+
+메인 페이지 하단 푸터에 운영 안내 및 투네이션 링크가 있습니다. Fork 후 자체 배포 시 [`index.html`](index.html)의 `<footer class="site-footer">` 안 `<a href="...">`를 본인 후원 페이지 URL로 바꾸면 됩니다.
 
 ### 로컬에 남는 정보
 
@@ -113,9 +130,11 @@ Cheese-Stick-Dock/
 │   ├── main.js                 # 진입점 (Jitter 폴링 및 상태 관리)
 │   ├── api.js                  # API 통신 (LocalStorage 폴백 & CSRF 헤더)
 │   ├── auth.js                 # OAuth 팝업 및 메시지 리스너 (Origin 검증)
+│   ├── ui.js                   # UI 갱신·카테고리 자동완성 등
 │   └── state.js                # 전역 상태 (dataSource 및 로컬 상태 정리)
 └── functions/api/              # Cloudflare Pages Functions
-    ├── live-status.js          # 라이브 상태 조회 (KV SWR 캐싱 & SSRF 방어)
+    ├── live-status.js          # 라이브 상태 조회 (KV SWR 캐싱, SSRF 방어, rate limit)
+    ├── categories/search.js    # 카테고리 검색 프록시 (rate limit)
     ├── lives/setting.js        # 방송 설정 변경 (입력값 화이트리스트 검증)
     ├── auth/callback.js        # OAuth 콜백 (세션 쿠키 발급)
     └── auth/revoke.js          # 세션/토큰 무효화 API
