@@ -2,16 +2,22 @@
 # 자세한 내용: https://developers.cloudflare.com/pages/functions/bindings/#kv-namespaces
 
 name = "cheese-stick-dock"
-compatibility_date = "2024-01-01"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
 
 # KV Namespace 바인딩
 # 1. Cloudflare 대시보드 → Workers & Pages → KV → Create namespace
 # 2. 생성된 namespace의 ID를 아래에 입력
 # 3. 또는 CLI: wrangler kv namespace create "LIVE_STATUS_CACHE"
+#               wrangler kv namespace create "SESSION_STORE"
 
 # [[ kv_namespaces ]]
 # binding = "LIVE_STATUS_CACHE"
 # id = "여기에_KV_NAMESPACE_ID_입력"
 
+# [[ kv_namespaces ]]
+# binding = "SESSION_STORE"
+# id = "세션_전용_KV_NAMESPACE_ID_입력"
+
 # 로컬 개발 시 KV를 자동 에뮬레이션하려면:
-# wrangler pages dev . --kv LIVE_STATUS_CACHE
+# wrangler pages dev . --kv LIVE_STATUS_CACHE --kv SESSION_STORE

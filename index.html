@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>Cheese Stick Dock</title>
     <link rel="icon" type="image/png" href="icon_green.png">
     <link rel="apple-touch-icon" href="icon_green.png">
@@ -24,7 +25,7 @@
             <p class="auth-notice">개인정보와 인증 토큰은 별도로 저장되지 않아 안전합니다.<br />최적의 성능을 위해 설정 데이터만 일시적으로 캐싱됩니다.</p>
         </div>
 
-        <div id="dashboard-section" style="display: none; flex-direction: column; gap: 16px;">
+        <div id="dashboard-section" class="dashboard-section is-hidden">
             <div class="dashboard-header">
                 <div class="header-title">
                     <img class="header-logo" src="icon_green.png" width="34" height="34" alt="">
@@ -35,9 +36,10 @@
             <div id="settings-panel" class="glass-panel">
                 <div class="setting-item">
                     <label for="live-title-input">방송 제목</label>
-                    <input type="text" id="live-title-input" class="modern-input" placeholder="방송 제목을 입력하세요">
+                    <input type="text" id="live-title-input" class="modern-input" maxlength="100"
+                        autocomplete="off" placeholder="방송 제목을 입력하세요">
                 </div>
-                <div class="setting-item" style="display: none;">
+                <div class="setting-item is-hidden">
                     <label for="live-category-type">카테고리 종류</label>
                     <div class="select-wrapper">
                         <select id="live-category-type" class="modern-input">
@@ -47,20 +49,21 @@
                         </select>
                     </div>
                 </div>
-                <div class="setting-item" style="position: relative;">
+                <div class="setting-item setting-item-relative">
                     <label for="category-search-input">카테고리 검색</label>
-                    <input type="text" id="category-search-input" class="modern-input"
-                        placeholder="검색어 입력 후 대기 (예: 원신)">
-                    <div id="category-search-results" class="autocomplete-dropdown" style="display: none;"></div>
+                    <input type="text" id="category-search-input" class="modern-input" maxlength="60"
+                        autocomplete="off" placeholder="검색어 입력 후 대기 (예: 원신)">
+                    <div id="category-search-results" class="autocomplete-dropdown is-hidden"></div>
                     <input type="hidden" id="live-category-id" value="">
 
-                    <div id="selected-category-display" class="selected-badge" style="display: none;">
+                    <div id="selected-category-display" class="selected-badge is-hidden">
                         <span class="badge-dot"></span><span id="selected-category-name"></span>
                     </div>
                 </div>
                 <div class="setting-item">
                     <label for="live-tags-input">태그 (쉼표로 구분)</label>
-                    <input type="text" id="live-tags-input" class="modern-input" placeholder="예: 소통, 종합게임, 신작">
+                    <input type="text" id="live-tags-input" class="modern-input" maxlength="320"
+                        autocomplete="off" placeholder="예: 소통, 종합게임, 신작">
                 </div>
 
                 <div class="action-buttons">

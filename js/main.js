@@ -111,10 +111,11 @@ async function handleLogin() {
         const response = await fetchUserChannel();
         if (response.ok) {
             const data = await response.json();
-            if (data.content && data.content.channelId) {
+            const verifiedChannelId = data?.content?.channelId;
+            if (typeof verifiedChannelId === 'string' && /^[a-f0-9]{10,64}$/i.test(verifiedChannelId)) {
                 updateAuthUi(true, state);
-                state.channelId = data.content.channelId;
-                localStorage.setItem('chzzkChannelId', state.channelId);
+                state.channelId = verifiedChannelId;
+                try { localStorage.setItem('chzzkChannelId', verifiedChannelId); } catch (_e) {}
                 startFetching();
                 loadAndShowSettings().then(() => startSettingsPolling());
             } else {
@@ -161,15 +162,15 @@ function applySettingsToUi(content) {
         dom.categorySearchInput.value = content.category.categoryValue || '';
         if (content.category.categoryValue) {
             dom.selectedCategoryName.textContent = content.category.categoryValue;
-            dom.selectedCategoryDisplay.style.display = 'block';
+            dom.selectedCategoryDisplay.classList.remove('is-hidden');
         } else {
-            dom.selectedCategoryDisplay.style.display = 'none';
+            dom.selectedCategoryDisplay.classList.add('is-hidden');
         }
     } else {
         dom.categoryTypeSelect.value = content.categoryType || 'GAME';
         dom.liveCategoryIdInput.value = '';
         dom.categorySearchInput.value = '';
-        dom.selectedCategoryDisplay.style.display = 'none';
+        dom.selectedCategoryDisplay.classList.add('is-hidden');
     }
     dom.liveTagsInput.value = (content.tags || []).join(', ');
 }
@@ -325,8 +326,8 @@ dom.categorySearchInput.addEventListener('input', (e) => {
     const query = e.target.value.trim();
     if (!query) {
         dom.liveCategoryIdInput.value = '';
-        dom.selectedCategoryDisplay.style.display = 'none';
-        dom.categorySearchResults.style.display = 'none';
+        dom.selectedCategoryDisplay.classList.add('is-hidden');
+        dom.categorySearchResults.classList.add('is-hidden');
         return;
     }
     if (searchTimeout) clearTimeout(searchTimeout);
@@ -343,7 +344,7 @@ dom.categorySearchInput.addEventListener('input', (e) => {
 
 document.addEventListener('click', (e) => {
     if (!dom.categorySearchInput.contains(e.target) && !dom.categorySearchResults.contains(e.target)) {
-        dom.categorySearchResults.style.display = 'none';
+        dom.categorySearchResults.classList.add('is-hidden');
     }
 });
 
@@ -351,10 +352,16 @@ document.addEventListener('click', (e) => {
 function initialize() {
     setupHideValuesFeature(state);
 
-    const savedId = localStorage.getItem('chzzkChannelId');
-    if (savedId) {
-        state.channelId = savedId;
-    }
+    // localStorage의 channelId는 단순 UI 힌트이므로, 형식 검증을 통과한 경우에만 임시 표시용으로 사용합니다.
+    // 실제 통계 호출에 쓰이는 channelId는 /api/users/me 응답으로 받은 값으로 항상 덮어씁니다.
+    try {
+        const savedId = localStorage.getItem('chzzkChannelId');
+        if (savedId && /^[a-f0-9]{10,64}$/i.test(savedId)) {
+            state.channelId = savedId;
+        } else if (savedId) {
+            localStorage.removeItem('chzzkChannelId');
+        }
+    } catch (_e) {}
 
     updateAuthUi(false, state);
     handleLogin();

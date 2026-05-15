@@ -1,6 +1,6 @@
 # Cheese Stick Dock
 
-현재 버전: **v0.3.2**
+현재 버전: **v0.4.0**
 
 **Cheese Stick Dock**은 치지직 스트리머를 위한 설정 관리 & 방송 통계 독(Dock) 애플리케이션입니다.  
 동시 시청자 수, 최고/평균 시청자, 팔로워를 실시간으로 표시하고, 방송 제목/카테고리/태그를 방송 중에도 손쉽게 변경할 수 있습니다.
@@ -16,7 +16,7 @@
 - 🔒 **OAuth 2.0 로그인**: 치지직 공식 OAuth 인증 방식 사용
 - 👁️ **수치 가리기**: 각 수치 클릭 시 숨김/표시 전환 (스트리밍 중 화면 보호)
 - ⚡ **최적화된 아키텍처**: KV 캐싱, Jitter 폴링, LocalStorage 폴백 적용
-- 🛡️ **강화된 보안**: HttpOnly 세션 쿠키, CSRF/XSS/SSRF 방어, HSTS/CSP 보안 헤더, 세션 무효화(Revoke) 로직, 공개 API IP당 요청 제한(rate limiting)
+- 🛡️ **강화된 보안**: HttpOnly 세션 쿠키, CSRF + Origin 이중 방어, SSRF/Open-Proxy 차단, 입력값 화이트리스트 검증, 엄격한 CSP(`'unsafe-inline'` 제거), HSTS/COOP/CORP, 세션 무효화(Revoke) 실패 명시 응답, 공개 API IP당 요청 제한, 안전 로깅(쿼리스트링 미기록)
 
 ---
 
@@ -40,25 +40,50 @@
 
 ---
 
-## 🔐 보안 모델 (v0.3.1+)
+## 🔐 보안 모델 (v0.4.0)
 
-- 인증 토큰은 브라우저 `localStorage`/`sessionStorage`에 저장하지 않습니다.
-- OAuth 콜백 후 서버가 세션을 KV에 저장하고, 클라이언트에는 `HttpOnly + Secure + SameSite` 세션 쿠키만 전달합니다.
-- 상태 변경 API(`PATCH /api/lives/setting`, `POST /api/auth/revoke`)는 CSRF 토큰(`X-CSRF-Token`) 검증을 통과해야 합니다.
-- 인증/설정 엔드포인트는 `no-store` 캐시 정책 및 rate limiting(경량)을 적용합니다.
-- 공개로 노출되기 쉬운 `GET /api/live-status`, `GET /api/categories/search`에도 IP 기준 rate limiting을 적용하여 KV·오리진 호출 남용을 완화합니다. (상세는 아래 표)
+### 인증 / 세션
+- 인증 토큰은 브라우저 `localStorage`/`sessionStorage`에 **절대 저장하지 않습니다**. 서버가 KV(`SESSION_STORE` 권장)에 저장하고, 클라이언트에는 `HttpOnly + Secure + SameSite=Lax` 세션 쿠키만 전달합니다.
+- 세션 ID는 256bit 무작위(`crypto.getRandomValues`), CSRF 토큰은 192bit. CSRF 비교는 **timing-safe**.
+- OAuth `state`는 `HttpOnly + Path=/api/auth` 쿠키에 저장한 256bit 무작위 값으로, 콜백에서 timing-safe 검증.
+- 콜백 페이지는 외부 JS 모듈(`/js/auth-callback.js`)을 로드하며, 응답에 **`'unsafe-inline'` 없는** 엄격한 CSP(`default-src 'none'`)를 직접 부여합니다.
+
+### CSRF / Origin 이중 방어
+- 상태 변경 API(`PATCH /api/lives/setting`, `POST /api/auth/revoke`)는 다음을 모두 통과해야 합니다.
+  1. CSRF 토큰(`X-CSRF-Token` 헤더 + `chzzk_csrf` 쿠키 + 세션 저장값) 3중 일치.
+  2. **Origin 헤더 화이트리스트 검증** (세션 부재 시 우회되던 logout-CSRF도 차단).
+- 인증된 GET 엔드포인트(`/api/users/me`, `/api/lives/setting`, `/api/categories/search`)는 `Sec-Fetch-Site` 메타데이터 검증으로 cross-site 트리거를 차단합니다.
+
+### 입력 검증 / SSRF
+- `live-status`의 `channelId`는 `^[a-f0-9]{10,64}$` 검증으로 SSRF/경로 주입 차단.
+- `lives/setting PATCH`는 화이트리스트 + **타입/길이/enum/배열 크기**까지 검증 (제목 100자, 태그 10개·각 30자, `categoryType ∈ {GAME,SPORTS,ETC}`, `categoryId` 형식 검사). 본문은 8KB 상한.
+- `categories/search`의 query는 1~60자만 허용. **세션 인증 사용자만 호출 가능**(Open API 자격증명 남용 방지)이며, 동일 query 응답을 60초간 KV 캐싱.
+
+### 토큰 폐기(revoke) 보장
+- 외부 폐기 API 실패 시에도 **로컬 세션을 삭제**하지만, 응답을 `502`로 명시해 사용자가 재시도/인지할 수 있게 합니다.
+
+### 보안 헤더
+- 정적 자산(`_headers`): `default-src 'self'`, `script-src 'self'`, `frame-ancestors 'none'`, HSTS, COOP/CORP, Permissions-Policy, X-Frame-Options.
+- 모든 함수 응답은 동일한 보안 헤더 세트를 코드에서 직접 부착(`applyDefaultSecurityHeaders`).
+
+### 안전 로깅
+- 보안 이벤트 로그는 `request.url` 전체 대신 `pathname`만 기록합니다 → OAuth `code`/`state`, `query` 같은 민감 파라미터가 로그에 남지 않습니다.
 
 ### 트래픽 제한 (공개 배포 시)
-
-저장소를 공개하거나 방문자가 많을 때 **동일 IP** 기준으로 요청 수를 제한합니다. 구현은 `functions/_lib/security.js`의 `checkRateLimit`(KV 키 접두사 `rl:`)을 사용합니다.
 
 | 엔드포인트 | 기준 (동일 IP, 60초 창) |
 |------------|-------------------------|
 | `GET /api/live-status` | 분당 120회 |
-| 위 요청 중 `force=true` | 추가로 분당 30회 (캐시 우회·오리진 직접 호출) |
-| `GET /api/categories/search` | 분당 60회 |
+| 위 요청 중 `force=true` | **로그인 필수** + 분당 30회 (캐시 우회·오리진 직접 호출) |
+| `GET /api/categories/search` | **로그인 필수** + 분당 60회 (응답 60초 KV 캐싱) |
+| `GET /api/users/me`, `/api/lives/setting` | 분당 120회 |
+| `PATCH /api/lives/setting` | 분당 30회 |
+| `POST /api/auth/revoke` | 분당 20회 |
+| `GET /api/auth/login`, `/api/auth/callback` | 분당 20~30회 |
 
-초과 시 HTTP **429**와 JSON 오류 본문을 반환합니다. 통계 조회는 클라이언트가 최근 **로컬 캐시**(약 2분)로 폴백할 수 있습니다. 숫자는 `functions/api/live-status.js`, `functions/api/categories/search.js` 상단 상수에서 조정하면 됩니다.
+초과 시 HTTP **429**와 `Retry-After: 60` 헤더, JSON 오류 본문을 반환합니다. 통계 조회는 클라이언트가 최근 **로컬 캐시**(약 2분)로 폴백할 수 있습니다.
+
+> **주의**: KV 기반 카운터는 race condition과 eventual consistency 한계가 있으므로, 결정적인 차단이 필요한 경우 **Cloudflare WAF Rate Limiting Rules / Turnstile**을 함께 적용하세요. CF-Connecting-IP 헤더가 없는 요청(=Cloudflare 프록시를 거치지 않은 요청)은 보수적으로 차단합니다.
 
 ### 후원 링크 (선택)
 
@@ -73,11 +98,14 @@
 
 ### 운영 체크리스트
 
-1. KV 바인딩 `LIVE_STATUS_CACHE` 또는 `SESSION_STORE`가 설정되어 있는지 확인
-2. 환경 변수 `CHZZK_CLIENT_ID`, `CHZZK_CLIENT_SECRET` 설정 확인
-3. HTTPS 환경에서만 배포(`Secure` 쿠키 사용)
-4. 배포 후 로그인/새로고침/로그아웃/설정변경 시나리오 점검
-5. 이슈 발생 시 세션 관련 KV 키(`session:*`) 삭제 후 재검증
+1. KV 바인딩 `LIVE_STATUS_CACHE`(통계 캐시)와 `SESSION_STORE`(세션 전용)를 **분리해서** 모두 설정.
+2. 환경 변수 `CHZZK_CLIENT_ID`, `CHZZK_CLIENT_SECRET` 설정 확인.
+3. `ALLOWED_ORIGIN`을 본인의 배포 도메인으로 명시 설정(여러 개는 공백 구분).
+4. **HTTPS 환경에서만 배포** (`Secure` 쿠키, HSTS).
+5. (권장) Cloudflare WAF에서 `/api/*`에 대한 Rate Limiting Rules 또는 Turnstile 적용으로 KV 카운터의 race condition 한계를 보완.
+6. 배포 후 로그인/새로고침/로그아웃/설정변경 시나리오 점검.
+7. 이슈 발생 시 세션 KV 키(`session:*`) 삭제 후 재검증, 토큰 폐기는 치지직 개발자 센터에서도 강제 만료 가능.
+8. `console.log`(`[security] ...`) 모니터링 항목: `oauth_state_mismatch`, `csrf_validation_failed*`, `origin_validation_failed_*`, `rate_limit_*`, `*_unauthenticated`, `*_misconfigured`.
 
 ---
 
@@ -100,16 +128,17 @@ git clone https://github.com/<your-github-id>/cheese-stick-dock.git
    - Framework preset: `None` / Build command: (비워두기) / Build output directory: `/`
 
 ### 4단계: KV Namespace 설정 (필수)
-안정적인 캐싱 기능을 위해 KV 스토리지를 연결해야 합니다.
-1. Cloudflare 대시보드 → Workers & Pages → **KV** → **Create namespace**. 이름을 `LIVE_STATUS_CACHE` 또는 원하는 이름으로 생성합니다.
+안정적인 캐싱과 안전한 세션 분리를 위해 **두 개의 KV namespace를 분리해서** 연결해야 합니다.
+1. Cloudflare 대시보드 → Workers & Pages → **KV** → **Create namespace**.
+   - 통계 캐시용: `LIVE_STATUS_CACHE`
+   - 세션 저장용: `SESSION_STORE` (강력 권장)
 2. 생성된 Pages 프로젝트 → **Settings** → **Functions** → **KV namespace bindings**으로 이동합니다.
-3. **Variable name**에 `LIVE_STATUS_CACHE`를 입력하고, 방금 생성한 KV namespace를 선택합니다.
-4. (권장) 세션 분리를 위해 `SESSION_STORE` 바인딩을 추가하고 별도 namespace를 연결합니다.
+3. 각각 **Variable name**에 `LIVE_STATUS_CACHE`, `SESSION_STORE`를 입력하고 위에서 만든 namespace를 매핑합니다.
 
 ### 5단계: 환경 변수 설정
 1. Pages 프로젝트 → **Settings** → **Environment variables** 탭으로 이동합니다.
 2. `CHZZK_CLIENT_ID`와 `CHZZK_CLIENT_SECRET`을 추가합니다.
-3. (선택) `ALLOWED_ORIGIN`에 본인의 배포 도메인(예: `https://your-app.pages.dev`)을 입력하여 CORS 오리진을 제한합니다. (미설정 시 현재 도메인 자동 사용)
+3. **`ALLOWED_ORIGIN`을 본인의 배포 도메인으로 명시 설정**합니다(예: `https://your-app.pages.dev`). 보안상 명시적 화이트리스트를 강력 권장하며, 여러 개는 공백으로 구분합니다.
 4. 모든 설정을 마친 후 **재배포(Redeploy)**합니다.
 
 ### 6단계: 치지직 앱 Redirect URI 수정
@@ -122,22 +151,27 @@ git clone https://github.com/<your-github-id>/cheese-stick-dock.git
 
 ```
 Cheese-Stick-Dock/
-├── index.html                  # 메인 페이지
-├── style.css                   # 스타일시트
+├── index.html                  # 메인 페이지 (인라인 스크립트/스타일 없음)
+├── style.css                   # 스타일시트 (콜백 페이지 스타일 포함)
 ├── wrangler.toml               # Cloudflare Pages 설정 및 KV 바인딩 안내
-├── _headers                    # 보안 헤더 설정 (CSP, HSTS, X-Frame-Options 등)
+├── _headers                    # 보안 헤더 설정 (엄격 CSP, HSTS, COOP/CORP 등)
 ├── js/                         # 클라이언트 JS 모듈
 │   ├── main.js                 # 진입점 (Jitter 폴링 및 상태 관리)
-│   ├── api.js                  # API 통신 (LocalStorage 폴백 & CSRF 헤더)
+│   ├── api.js                  # API 통신 (LocalStorage 폴백 & CSRF 헤더 강제)
 │   ├── auth.js                 # OAuth 팝업 및 메시지 리스너 (Origin 검증)
-│   ├── ui.js                   # UI 갱신·카테고리 자동완성 등
+│   ├── auth-callback.js        # OAuth 콜백 페이지의 외부 스크립트 (CSP 강화용)
+│   ├── ui.js                   # UI 갱신·카테고리 자동완성 등 (XSS 안전)
 │   └── state.js                # 전역 상태 (dataSource 및 로컬 상태 정리)
-└── functions/api/              # Cloudflare Pages Functions
-    ├── live-status.js          # 라이브 상태 조회 (KV SWR 캐싱, SSRF 방어, rate limit)
-    ├── categories/search.js    # 카테고리 검색 프록시 (rate limit)
-    ├── lives/setting.js        # 방송 설정 변경 (입력값 화이트리스트 검증)
-    ├── auth/callback.js        # OAuth 콜백 (세션 쿠키 발급)
-    └── auth/revoke.js          # 세션/토큰 무효화 API
+└── functions/
+    ├── _lib/security.js        # 세션/CSRF/Origin/Sec-Fetch/Rate Limit/안전 로깅 헬퍼
+    └── api/
+        ├── live-status.js      # 라이브 상태 조회 (KV SWR, SSRF 방어, force=세션 필요)
+        ├── categories/search.js  # 카테고리 검색 (세션 인증 필수, KV 응답 캐싱)
+        ├── lives/setting.js      # 방송 설정 (입력 검증, CSRF + Origin 이중 방어)
+        ├── users/me.js           # 내 채널 정보 (Sec-Fetch-Site 검증)
+        ├── auth/login.js         # OAuth 로그인 시작 (256bit state)
+        ├── auth/callback.js      # OAuth 콜백 (외부 스크립트 + 엄격 CSP)
+        └── auth/revoke.js        # 세션/토큰 폐기 (실패 명시 응답)
 ```
 
 ---

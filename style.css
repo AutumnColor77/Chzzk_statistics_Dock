@@ -514,3 +514,67 @@ select.modern-input {
         grid-template-columns: 1fr;
     }
 }
+
+/* --- Utility & Layout Classes (인라인 스타일 제거용) --- */
+
+.is-hidden {
+    display: none !important;
+}
+
+.dashboard-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.setting-item-relative {
+    position: relative;
+}
+
+/* --- OAuth Callback Page --- */
+
+.callback-body {
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.callback-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    padding: 28px 24px;
+    text-align: center;
+    max-width: 360px;
+    width: 100%;
+}
+
+.callback-title {
+    margin: 0 0 8px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--chzzk-green);
+}
+
+.callback-desc {
+    margin: 0 0 16px;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.callback-fallback a {
+    color: var(--chzzk-green);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-size: 13px;
+    font-weight: 600;
+}

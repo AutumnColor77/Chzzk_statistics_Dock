@@ -1,53 +1,76 @@
 import {
+  applyDefaultSecurityHeaders,
   checkRateLimit,
+  corsHeaders,
   getSession,
+  isSafeFetchSite,
+  jsonResponse,
   logSecurityEvent,
   requireAllowedMethods,
+  safePath,
   withNoStore
 } from '../../_lib/security.js';
 
+const ALLOW_METHODS = 'GET, OPTIONS';
+const ALLOW_HEADERS = 'Content-Type, X-CSRF-Token';
+
 export async function onRequest(context) {
   const { request, env } = context;
-  const allowedOrigin = env.ALLOWED_ORIGIN || new URL(request.url).origin;
+
   const methodErr = requireAllowedMethods(request, ['GET']);
   if (methodErr) return methodErr;
 
   const limit = await checkRateLimit(env, request, 'users_me', 120, 60);
-  if (!limit.allowed) return new Response('Too Many Requests', { status: 429 });
+  if (!limit.allowed) {
+    return jsonResponse({ message: 'Too many requests' }, {
+      status: 429, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+    });
+  }
+
+  if (!isSafeFetchSite(request, env)) {
+    logSecurityEvent('fetch_site_blocked_users_me', { path: safePath(request) });
+    return jsonResponse({ message: 'Forbidden origin' }, {
+      status: 403, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+    });
+  }
 
   const session = await getSession(env, request);
   const accessToken = session?.data?.accessToken;
   if (!accessToken) {
-    logSecurityEvent('session_missing_users_me', { url: request.url });
-    return new Response('Unauthorized', { status: 401 });
+    logSecurityEvent('session_missing_users_me', { path: safePath(request) });
+    return jsonResponse({ message: 'Unauthorized' }, {
+      status: 401, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+    });
   }
 
-  const apiUrl = 'https://openapi.chzzk.naver.com/open/v1/users/me';
-  
-  const response = await fetch(apiUrl, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Accept': 'application/json'
-    }
-  });
-  
-  const newResponse = new Response(response.body, response);
-  newResponse.headers.set('Access-Control-Allow-Origin', allowedOrigin);
-  newResponse.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  newResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type, X-CSRF-Token');
-  withNoStore(newResponse.headers);
-  return newResponse;
+  let upstream;
+  let payload;
+  try {
+    upstream = await fetch('https://openapi.chzzk.naver.com/open/v1/users/me', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json'
+      }
+    });
+    payload = await upstream.json();
+  } catch (_e) {
+    logSecurityEvent('users_me_upstream_error', { path: safePath(request) });
+    return jsonResponse({ message: 'Upstream error' }, {
+      status: 502, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+    });
+  }
+
+  const headers = corsHeaders(request, env, { methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS });
+  headers.set('Content-Type', 'application/json; charset=UTF-8');
+  withNoStore(headers);
+  applyDefaultSecurityHeaders(headers);
+  return new Response(JSON.stringify(payload), { status: upstream.status, headers });
 }
 
 export async function onRequestOptions(context) {
   const { request, env } = context;
-  const allowedOrigin = env.ALLOWED_ORIGIN || new URL(request.url).origin;
-  return new Response(null, {
-    headers: {
-      'Access-Control-Allow-Origin': allowedOrigin,
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, X-CSRF-Token'
-    }
-  });
+  const headers = corsHeaders(request, env, { methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS });
+  applyDefaultSecurityHeaders(headers);
+  return new Response(null, { headers });
 }

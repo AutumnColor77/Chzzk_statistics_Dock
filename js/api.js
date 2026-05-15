@@ -8,26 +8,23 @@ function getCookie(name) {
     return match ? decodeURIComponent(match[1]) : '';
 }
 
-/**
- * 라이브 상태 데이터를 LocalStorage에 캐싱합니다.
- */
+function getCsrfTokenOrThrow() {
+    const token = getCookie('chzzk_csrf');
+    if (!token) {
+        throw new Error('CSRF token missing — please log in again.');
+    }
+    return token;
+}
+
 function saveToLocalCache(channelId, data) {
     try {
-        const entry = {
-            channelId,
-            data,
-            timestamp: Date.now()
-        };
+        const entry = { channelId, data, timestamp: Date.now() };
         localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(entry));
     } catch (_e) {
         // LocalStorage 용량 초과 등 — 무시
     }
 }
 
-/**
- * LocalStorage에서 캐싱된 라이브 상태를 가져옵니다.
- * 유효 기간(2분)이 지난 캐시는 null을 반환합니다.
- */
 function loadFromLocalCache(channelId) {
     try {
         const raw = localStorage.getItem(LOCAL_CACHE_KEY);
@@ -46,15 +43,13 @@ function loadFromLocalCache(channelId) {
 /**
  * 라이브 상태를 가져옵니다.
  * 성공 시 LocalStorage에 캐싱하고, 서버 장애 시 로컬 캐시로 폴백합니다.
- *
- * @returns {{ data: object, source: 'server'|'local-cache' }}
  */
 export async function fetchLiveStatus(channelId, force = false) {
-    let url = `/api/live-status?channelId=${channelId}`;
+    let url = `/api/live-status?channelId=${encodeURIComponent(channelId)}`;
     if (force) url += '&force=true';
 
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, { credentials: 'same-origin' });
 
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -63,36 +58,32 @@ export async function fetchLiveStatus(channelId, force = false) {
         const data = await response.json();
         const cacheStatus = response.headers.get('X-Cache') || 'UNKNOWN';
 
-        // 서버 응답 성공 → LocalStorage에 백업 저장
         saveToLocalCache(channelId, data);
-
         return { data, source: 'server', cacheStatus };
 
     } catch (error) {
-        // 서버 장애 (KV 초과, 네트워크 오류, 502 등) → 로컬 캐시 폴백
         const cachedData = loadFromLocalCache(channelId);
         if (cachedData) {
             return { data: cachedData, source: 'local-cache', cacheStatus: 'LOCAL' };
         }
-
-        // 로컬 캐시도 없으면 에러 전파
         throw error;
     }
 }
 
 export async function fetchUserChannel() {
-    return fetch('/api/users/me');
+    return fetch('/api/users/me', { credentials: 'same-origin' });
 }
 
 export async function fetchLiveSettings() {
-    return fetch('/api/lives/setting');
+    return fetch('/api/lives/setting', { credentials: 'same-origin' });
 }
 
 export async function updateLiveSettings(body) {
-    const csrfToken = getCookie('chzzk_csrf');
+    const csrfToken = getCsrfTokenOrThrow();
     return fetch('/api/lives/setting', {
         method: 'PATCH',
-        headers: { 
+        credentials: 'same-origin',
+        headers: {
             'Content-Type': 'application/json',
             'X-CSRF-Token': csrfToken
         },
@@ -102,7 +93,9 @@ export async function updateLiveSettings(body) {
 
 export async function searchCategories(query) {
     if (!query) return null;
-    const res = await fetch(`/api/categories/search?query=${encodeURIComponent(query)}`);
+    const res = await fetch(`/api/categories/search?query=${encodeURIComponent(query)}`, {
+        credentials: 'same-origin'
+    });
     if (res.ok) {
         return res.json();
     }
@@ -110,10 +103,17 @@ export async function searchCategories(query) {
 }
 
 export async function revokeToken() {
-    const csrfToken = getCookie('chzzk_csrf');
+    let csrfToken = '';
+    try {
+        csrfToken = getCsrfTokenOrThrow();
+    } catch (_e) {
+        // 토큰이 없으면 굳이 서버에 요청하지 않습니다 (이미 로그아웃 상태로 간주).
+        return;
+    }
     try {
         await fetch('/api/auth/revoke', {
             method: 'POST',
+            credentials: 'same-origin',
             headers: { 'X-CSRF-Token': csrfToken }
         });
     } catch (_e) {

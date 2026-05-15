@@ -28,6 +28,9 @@ const HEADER_LOGO_BY_SOURCE = {
     error: 'icon_red.png'
 };
 
+function show(el) { if (el) el.classList.remove('is-hidden'); }
+function hide(el) { if (el) el.classList.add('is-hidden'); }
+
 export function updateUi(state, customErrorMsg) {
     const items = {
         'concurrent-viewers': state.liveStatus === 'OPEN' ? state.concurrentViewers.toLocaleString() : '오프라인',
@@ -39,7 +42,7 @@ export function updateUi(state, customErrorMsg) {
     if (customErrorMsg) {
         Object.keys(items).forEach(key => items[key] = customErrorMsg);
     } else if (!state.channelId) {
-         Object.keys(items).forEach(key => items[key] = '로딩 중...');
+        Object.keys(items).forEach(key => items[key] = '로딩 중...');
     }
 
     dom.statItems.forEach(item => {
@@ -54,7 +57,6 @@ export function updateUi(state, customErrorMsg) {
         }
     });
 
-    // 데이터 출처에 따라 상태 인디케이터 업데이트
     updateDataSourceIndicator(state.dataSource);
 }
 
@@ -65,7 +67,6 @@ function updateDataSourceIndicator(source) {
 
     if (!dom.statusDot) return;
 
-    // 기본 상태로 리셋
     dom.statusDot.classList.remove('status-dot--cached', 'status-dot--error');
     dom.statusDot.title = '';
 
@@ -80,12 +81,12 @@ function updateDataSourceIndicator(source) {
 
 export function updateAuthUi(hasToken, state) {
     if (hasToken) {
-        dom.authSection.style.display = 'none';
-        dom.dashboardSection.style.display = 'flex';
-        updateUi(state); // Load initial layout values (e.g. "로딩 중...")
+        hide(dom.authSection);
+        show(dom.dashboardSection);
+        updateUi(state);
     } else {
-        dom.authSection.style.display = 'block';
-        dom.dashboardSection.style.display = 'none';
+        show(dom.authSection);
+        hide(dom.dashboardSection);
         state.channelId = null;
         updateUi(state, 'ID 없음');
     }
@@ -94,13 +95,14 @@ export function updateAuthUi(hasToken, state) {
 export function renderCategoryResults(results, onSelect) {
     dom.categorySearchResults.innerHTML = '';
     if (!results || results.length === 0) {
-        dom.categorySearchResults.style.display = 'none';
+        hide(dom.categorySearchResults);
         return;
     }
 
     const ul = document.createElement('ul');
     results.forEach(item => {
         const li = document.createElement('li');
+        // textContent 사용으로 XSS 방지.
         li.textContent = item.categoryValue;
         li.addEventListener('click', () => {
             dom.liveCategoryIdInput.value = item.categoryId;
@@ -109,28 +111,29 @@ export function renderCategoryResults(results, onSelect) {
                 dom.categoryTypeSelect.value = item.categoryType;
             }
             dom.selectedCategoryName.textContent = item.categoryValue;
-            dom.selectedCategoryDisplay.style.display = 'block';
-            dom.categorySearchResults.style.display = 'none';
+            show(dom.selectedCategoryDisplay);
+            hide(dom.categorySearchResults);
         });
         ul.appendChild(li);
     });
 
     dom.categorySearchResults.appendChild(ul);
-    dom.categorySearchResults.style.display = 'block';
+    show(dom.categorySearchResults);
 }
 
 export function setupHideValuesFeature(state) {
     dom.statItems.forEach(item => {
         const storageKey = `value-hidden-${item.id}`;
-        const isHidden = localStorage.getItem(storageKey) === 'true';
-        
+        let isHidden = false;
+        try { isHidden = localStorage.getItem(storageKey) === 'true'; } catch (_e) {}
+
         item.classList.toggle('value-hidden', isHidden);
 
         item.addEventListener('click', () => {
             const shouldHide = !item.classList.contains('value-hidden');
             item.classList.toggle('value-hidden', shouldHide);
-            localStorage.setItem(storageKey, shouldHide);
-            updateUi(state); 
+            try { localStorage.setItem(storageKey, shouldHide); } catch (_e) {}
+            updateUi(state);
         });
     });
 }
