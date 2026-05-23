@@ -23,12 +23,32 @@ export async function logout() {
     clearLocalSessionState();
 }
 
+const AUTH_CHANNEL_NAME = 'cheese-stick-dock-auth';
+
 export function setupAuthListener(onSuccess) {
+    let handled = false;
+    const runOnce = () => {
+        if (handled) return;
+        handled = true;
+        onSuccess();
+    };
+
     window.addEventListener('message', (event) => {
         if (event.origin !== window.location.origin) return;
         if (!event.source) return;
         if (event.data && event.data.type === 'CHZZK_AUTH_SUCCESS') {
-            onSuccess();
+            runOnce();
         }
     });
+
+    try {
+        const channel = new BroadcastChannel(AUTH_CHANNEL_NAME);
+        channel.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'CHZZK_AUTH_SUCCESS') {
+                runOnce();
+            }
+        });
+    } catch (_e) {
+        // BroadcastChannel 미지원
+    }
 }
