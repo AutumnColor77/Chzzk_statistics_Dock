@@ -19,6 +19,11 @@
   - [x] 메인 페이지 하단 푸터에 운영 안내·투네이션 링크(`index.html`). Fork 시 본인 후원 URL로 `href` 수정.
   - [x] README에 트래픽 제한·후원 링크 안내 반영(v0.3.2).
 
+- [x] **3-2. OAuth 팝업 로그인 안정화 (v0.4.1)**
+  - [x] 인증 성공 시 메인 창에서 팝업 자동 닫기 (`js/auth.js`).
+  - [x] COOP `same-origin-allow-popups` 적용 (`_headers`, `functions/_lib/security.js`).
+  - [x] README·릴리스 노트 반영.
+
 - [ ] **4. 향후 과제**
   - [ ] **Refresh Token 자동 갱신**: Access Token 만료 전 백그라운드에서 갱신.
   - [ ] **UI/UX 고도화**: 더 풍부한 애니메이션 및 다크 모드 테마 최적화.

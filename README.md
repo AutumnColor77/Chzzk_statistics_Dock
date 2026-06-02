@@ -1,6 +1,6 @@
 # Cheese Stick Dock
 
-현재 버전: **v0.4.0**
+현재 버전: **v0.4.1**
 
 **Cheese Stick Dock**은 치지직 스트리머를 위한 설정 관리 & 방송 통계 독(Dock) 애플리케이션입니다.  
 동시 시청자 수, 최고/평균 시청자, 팔로워를 실시간으로 표시하고, 방송 제목/카테고리/태그를 방송 중에도 손쉽게 변경할 수 있습니다.
@@ -16,7 +16,7 @@
 - 🔒 **OAuth 2.0 로그인**: 치지직 공식 OAuth 인증 방식 사용
 - 👁️ **수치 가리기**: 각 수치 클릭 시 숨김/표시 전환 (스트리밍 중 화면 보호)
 - ⚡ **최적화된 아키텍처**: KV 캐싱, Jitter 폴링, LocalStorage 폴백 적용
-- 🛡️ **강화된 보안**: HttpOnly 세션 쿠키, CSRF + Origin 이중 방어, SSRF/Open-Proxy 차단, 입력값 화이트리스트 검증, 엄격한 CSP(`'unsafe-inline'` 제거), HSTS/COOP/CORP, 세션 무효화(Revoke) 실패 명시 응답, 공개 API IP당 요청 제한, 안전 로깅(쿼리스트링 미기록)
+- 🛡️ **강화된 보안**: HttpOnly 세션 쿠키, CSRF + Origin 이중 방어, SSRF/Open-Proxy 차단, 입력값 화이트리스트 검증, 엄격한 CSP(`'unsafe-inline'` 제거), HSTS/COOP(`same-origin-allow-popups`)/CORP, 세션 무효화(Revoke) 실패 명시 응답, 공개 API IP당 요청 제한, 안전 로깅(쿼리스트링 미기록)
 
 ---
 
@@ -40,13 +40,18 @@
 
 ---
 
-## 🔐 보안 모델 (v0.4.0)
+## 🔐 보안 모델 (v0.4.1)
 
 ### 인증 / 세션
 - 인증 토큰은 브라우저 `localStorage`/`sessionStorage`에 **절대 저장하지 않습니다**. 서버가 KV(`SESSION_STORE` 권장)에 저장하고, 클라이언트에는 `HttpOnly + Secure + SameSite=Lax` 세션 쿠키만 전달합니다.
 - 세션 ID는 256bit 무작위(`crypto.getRandomValues`), CSRF 토큰은 192bit. CSRF 비교는 **timing-safe**.
 - OAuth `state`는 `HttpOnly + Path=/api/auth` 쿠키에 저장한 256bit 무작위 값으로, 콜백에서 timing-safe 검증.
 - 콜백 페이지는 외부 JS 모듈(`/js/auth-callback.js`)을 로드하며, 응답에 **`'unsafe-inline'` 없는** 엄격한 CSP(`default-src 'none'`)를 직접 부여합니다.
+
+### OAuth 팝업 로그인 (v0.4.1)
+- 메인 창에서 `window.open`으로 `/api/auth/login` 팝업을 연 뒤, 치지직 연동 완료 시 콜백 페이지(`/api/auth/callback`)가 메인 창에 성공을 알립니다.
+- 통지 경로: `postMessage`(동일 origin) + `BroadcastChannel`(`cheese-stick-dock-auth`) 이중화. 메인 창은 인증 성공 시 **보관 중인 팝업 참조로 `close()`**를 호출해 창이 남지 않도록 합니다.
+- `Cross-Origin-Opener-Policy`는 `same-origin-allow-popups`를 사용합니다. OAuth 중 팝업이 치지직(외부 origin)을 거쳐도 opener와의 통신·닫기가 끊기지 않도록 하며, `noopener`는 사용하지 않습니다(콜백 → opener `postMessage` 유지).
 
 ### CSRF / Origin 이중 방어
 - 상태 변경 API(`PATCH /api/lives/setting`, `POST /api/auth/revoke`)는 다음을 모두 통과해야 합니다.
@@ -63,8 +68,8 @@
 - 외부 폐기 API 실패 시에도 **로컬 세션을 삭제**하지만, 응답을 `502`로 명시해 사용자가 재시도/인지할 수 있게 합니다.
 
 ### 보안 헤더
-- 정적 자산(`_headers`): `default-src 'self'`, `script-src 'self'`, `frame-ancestors 'none'`, HSTS, COOP/CORP, Permissions-Policy, X-Frame-Options.
-- 모든 함수 응답은 동일한 보안 헤더 세트를 코드에서 직접 부착(`applyDefaultSecurityHeaders`).
+- 정적 자산(`_headers`): `default-src 'self'`, `script-src 'self'`, `frame-ancestors 'none'`, HSTS, **COOP `same-origin-allow-popups`**, CORP, Permissions-Policy, X-Frame-Options.
+- 모든 함수 응답은 동일한 보안 헤더 세트를 코드에서 직접 부착(`applyDefaultSecurityHeaders`, COOP 포함).
 
 ### 안전 로깅
 - 보안 이벤트 로그는 `request.url` 전체 대신 `pathname`만 기록합니다 → OAuth `code`/`state`, `query` 같은 민감 파라미터가 로그에 남지 않습니다.
@@ -103,7 +108,7 @@
 3. `ALLOWED_ORIGIN`을 본인의 배포 도메인으로 명시 설정(여러 개는 공백 구분).
 4. **HTTPS 환경에서만 배포** (`Secure` 쿠키, HSTS).
 5. (권장) Cloudflare WAF에서 `/api/*`에 대한 Rate Limiting Rules 또는 Turnstile 적용으로 KV 카운터의 race condition 한계를 보완.
-6. 배포 후 로그인/새로고침/로그아웃/설정변경 시나리오 점검.
+6. 배포 후 **OAuth 팝업 로그인**(팝업 자동 닫힘·대시보드 전환)/새로고침/로그아웃/설정변경 시나리오 점검.
 7. 이슈 발생 시 세션 KV 키(`session:*`) 삭제 후 재검증, 토큰 폐기는 치지직 개발자 센터에서도 강제 만료 가능.
 8. `console.log`(`[security] ...`) 모니터링 항목: `oauth_state_mismatch`, `csrf_validation_failed*`, `origin_validation_failed_*`, `rate_limit_*`, `*_unauthenticated`, `*_misconfigured`.
 
@@ -158,8 +163,8 @@ Cheese-Stick-Dock/
 ├── js/                         # 클라이언트 JS 모듈
 │   ├── main.js                 # 진입점 (Jitter 폴링 및 상태 관리)
 │   ├── api.js                  # API 통신 (LocalStorage 폴백 & CSRF 헤더 강제)
-│   ├── auth.js                 # OAuth 팝업 및 메시지 리스너 (Origin 검증)
-│   ├── auth-callback.js        # OAuth 콜백 페이지의 외부 스크립트 (CSP 강화용)
+│   ├── auth.js                 # OAuth 팝업 참조·자동 닫기, BroadcastChannel/postMessage 리스너
+│   ├── auth-callback.js        # OAuth 콜백: opener·BroadcastChannel 통지 후 window.close()
 │   ├── ui.js                   # UI 갱신·카테고리 자동완성 등 (XSS 안전)
 │   └── state.js                # 전역 상태 (dataSource 및 로컬 상태 정리)
 └── functions/

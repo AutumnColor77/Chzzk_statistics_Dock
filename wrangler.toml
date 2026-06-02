@@ -21,3 +21,6 @@ compatibility_flags = ["nodejs_compat"]
 
 # 로컬 개발 시 KV를 자동 에뮬레이션하려면:
 # wrangler pages dev . --kv LIVE_STATUS_CACHE --kv SESSION_STORE
+#
+# 프로덕션 배포 (Git 연동 대신 CLI 사용 시):
+# wrangler pages deploy . --project-name=cheese-stick-dock --branch=main
