@@ -2,6 +2,7 @@
 # 자세한 내용: https://developers.cloudflare.com/pages/functions/bindings/#kv-namespaces
 
 name = "cheese-stick-dock"
+pages_build_output_dir = "."
 compatibility_date = "2025-09-01"
 compatibility_flags = ["nodejs_compat"]
 
