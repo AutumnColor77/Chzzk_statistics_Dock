@@ -110,7 +110,19 @@
 5. (권장) Cloudflare WAF에서 `/api/*`에 대한 Rate Limiting Rules 또는 Turnstile 적용으로 KV 카운터의 race condition 한계를 보완.
 6. 배포 후 **OAuth 팝업 로그인**(팝업 자동 닫힘·대시보드 전환)/새로고침/로그아웃/설정변경 시나리오 점검.
 7. 이슈 발생 시 세션 KV 키(`session:*`) 삭제 후 재검증, 토큰 폐기는 치지직 개발자 센터에서도 강제 만료 가능.
-8. `console.log`(`[security] ...`) 모니터링 항목: `oauth_state_mismatch`, `csrf_validation_failed*`, `origin_validation_failed_*`, `rate_limit_*`, `*_unauthenticated`, `*_misconfigured`.
+8. `console.log`(`[security] ...`) 모니터링 항목: `oauth_state_mismatch`, `csrf_validation_failed*`, `origin_validation_failed_*`, `rate_limit_*`, `*_unauthenticated`, `*_misconfigured`, `session_store_missing`.
+
+### 문제 해결: `Session store is not configured.`
+
+| 원인 | 조치 |
+|------|------|
+| KV 바인딩 없음 | 위 **4단계**대로 `LIVE_STATUS_CACHE`(필수) 바인딩 추가 후 재배포 |
+| Variable name 오타 | `LIVE_STATUS_CACHE` / `SESSION_STORE` 철자·대소문자 일치 확인 |
+| Preview만 설정됨 | Production 환경에도 동일 바인딩 추가 |
+| 바인딩 후 미반영 | Pages에서 **Retry deployment** 실행 |
+| **예전엔 됐는데 갑자기 안 됨** | `wrangler.toml`에 `pages_build_output_dir`만 있고 `kv_namespaces`가 비어 있으면, Git 배포가 **대시보드 KV 설정을 빈 값으로 덮어쓸 수 있습니다**. 이 저장소는 KV를 **대시보드에서만** 관리합니다(`pages_build_output_dir` 미사용). KV를 다시 연결한 뒤 재배포하세요. |
+
+> **왜 풀렸나?** Cloudflare Pages는 `pages_build_output_dir`가 있는 `wrangler.toml`로 배포할 때, 파일에 적힌 바인딩이 **설정의 기준**이 됩니다. KV가 주석 처리된 채로 푸시되면, 예전에 대시보드에 묶어둔 `LIVE_STATUS_CACHE` / `SESSION_STORE`가 배포 과정에서 반영되지 않을 수 있습니다. 코드가 KV를 삭제한 것은 아닙니다.
 
 ---
 
@@ -132,13 +144,23 @@ git clone https://github.com/<your-github-id>/cheese-stick-dock.git
 2. 레포지토리 연동 후 빌드 설정을 다음과 같이 입력합니다:
    - Framework preset: `None` / Build command: (비워두기) / Build output directory: `/`
 
-### 4단계: KV Namespace 설정 (필수)
-안정적인 캐싱과 안전한 세션 분리를 위해 **두 개의 KV namespace를 분리해서** 연결해야 합니다.
-1. Cloudflare 대시보드 → Workers & Pages → **KV** → **Create namespace**.
-   - 통계 캐시용: `LIVE_STATUS_CACHE`
-   - 세션 저장용: `SESSION_STORE` (강력 권장)
-2. 생성된 Pages 프로젝트 → **Settings** → **Functions** → **KV namespace bindings**으로 이동합니다.
-3. 각각 **Variable name**에 `LIVE_STATUS_CACHE`, `SESSION_STORE`를 입력하고 위에서 만든 namespace를 매핑합니다.
+### 4단계: KV Namespace 설정 (필수 — 로그인에 반드시 필요)
+OAuth 로그인·세션 쿠키는 Cloudflare **KV**에 저장됩니다. 바인딩이 없으면 로그인 콜백에서 `Session store is not configured.`(503)가 발생합니다.
+
+1. Cloudflare 대시보드 → Workers & Pages → **KV** → **Create namespace** (이름은 자유, 아래 **Variable name**만 정확히 맞추면 됩니다).
+   - 통계 캐시용 namespace 1개
+   - (권장) 세션 전용 namespace 1개 — `SESSION_STORE`와 분리
+2. Pages 프로젝트 → **Settings** → **Functions** → **KV namespace bindings** → **Add binding**
+3. **Production**과 **Preview** 환경 모두에 아래를 추가합니다.
+
+| Variable name (정확히 일치) | 용도 |
+|-----------------------------|------|
+| `LIVE_STATUS_CACHE` | 통계 API 캐시 + 세션 폴백 |
+| `SESSION_STORE` | 세션 전용 (권장, 없으면 `LIVE_STATUS_CACHE`로 폴백) |
+
+4. 저장 후 **Deployments** → 최신 배포 **Retry deployment** 또는 `main`에 다시 푸시해 Functions 바인딩을 반영합니다.
+
+> **로컬 개발**: `wrangler pages dev . --kv LIVE_STATUS_CACHE --kv SESSION_STORE`
 
 ### 5단계: 환경 변수 설정
 1. Pages 프로젝트 → **Settings** → **Environment variables** 탭으로 이동합니다.
