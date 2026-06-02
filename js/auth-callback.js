@@ -3,6 +3,8 @@
 
     var TARGET_ORIGIN = window.location.origin;
     var AUTH_CHANNEL_NAME = 'cheese-stick-dock-auth';
+    var AUTH_STORAGE_KEY = 'chzzk_auth_success';
+    var MAIN_WINDOW_NAME = 'CheeseStickDockApp';
     var AUTH_SUCCESS = { type: 'CHZZK_AUTH_SUCCESS' };
 
     function broadcastAuthSuccess() {
@@ -11,7 +13,7 @@
             channel.postMessage(AUTH_SUCCESS);
             channel.close();
         } catch (_e) {
-            // BroadcastChannel 미지원 환경 — opener/postMessage에만 의존
+            // BroadcastChannel 미지원 환경
         }
     }
 
@@ -19,10 +21,45 @@
         try {
             if (window.opener && !window.opener.closed) {
                 window.opener.postMessage(AUTH_SUCCESS, TARGET_ORIGIN);
+                window.opener.focus();
             }
         } catch (_e) {
             // COOP 등으로 opener 접근 불가
         }
+    }
+
+    function markAuthSuccess() {
+        try {
+            localStorage.setItem(AUTH_STORAGE_KEY, String(Date.now()));
+        } catch (_e) {
+            // ignore
+        }
+    }
+
+    function attemptClose() {
+        try {
+            window.close();
+        } catch (_e) {
+            // ignore
+        }
+        try {
+            window.open('', '_self');
+            window.close();
+        } catch (_e) {
+            // ignore
+        }
+    }
+
+    function focusMainAndClose() {
+        try {
+            var main = window.open('/', MAIN_WINDOW_NAME);
+            if (main) {
+                main.focus();
+            }
+        } catch (_e) {
+            // ignore
+        }
+        attemptClose();
     }
 
     function showCloseHint() {
@@ -33,22 +70,29 @@
     }
 
     function finishAuth() {
-        // COOP(same-origin)로 OAuth 후 opener가 끊겨도 메인 창에 알림
+        markAuthSuccess();
         broadcastAuthSuccess();
         notifyOpener();
 
-        try {
-            window.close();
-        } catch (_e) {
-            // ignore
-        }
+        attemptClose();
+        [50, 150, 400, 800].forEach(function (ms) {
+            window.setTimeout(function () {
+                if (!window.closed) {
+                    attemptClose();
+                }
+            }, ms);
+        });
 
-        // 닫히지 않으면 안내만 표시 — 팝업을 메인 앱(/)으로 보내지 않음
         window.setTimeout(function () {
             if (!window.closed) {
-                showCloseHint();
+                focusMainAndClose();
             }
-        }, 300);
+            window.setTimeout(function () {
+                if (!window.closed) {
+                    showCloseHint();
+                }
+            }, 400);
+        }, 1000);
     }
 
     if (document.readyState === 'loading') {
