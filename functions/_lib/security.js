@@ -374,7 +374,8 @@ export function applyDefaultSecurityHeaders(headers, { allowFrame = false } = {}
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   headers.set('Cross-Origin-Resource-Policy', 'same-origin');
-  headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+  // OAuth 팝업이 치지직 등 외부 origin을 거친 뒤에도 opener와 통신·닫기가 되도록 allow-popups 사용
+  headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
   headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), interest-cohort=()');
   headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   if (!allowFrame) {

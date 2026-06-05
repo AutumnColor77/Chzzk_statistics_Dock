@@ -123,7 +123,19 @@ export async function onRequest(context) {
   });
   if (!session) {
     logSecurityEvent('session_store_missing', { path: safePath(request) });
-    return new Response('Session store is not configured.', { status: 503 });
+    const headers = new Headers({ 'Content-Type': 'text/html; charset=UTF-8' });
+    withNoStore(headers);
+    applyDefaultSecurityHeaders(headers);
+    return new Response(
+      `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>설정 필요</title></head><body>
+<p><strong>세션 저장소(KV)가 연결되지 않았습니다.</strong></p>
+<p>Cloudflare Pages → 프로젝트 → Settings → Functions → <strong>KV namespace bindings</strong>에서
+<code>LIVE_STATUS_CACHE</code>와 <code>SESSION_STORE</code>를 추가한 뒤 재배포하세요.
+(최소 <code>LIVE_STATUS_CACHE</code> 하나만 있어도 로그인은 동작합니다.)</p>
+<p><a href="/">메인으로</a></p>
+</body></html>`,
+      { status: 503, headers }
+    );
   }
 
   const headers = new Headers({ 'Content-Type': 'text/html; charset=UTF-8' });
