@@ -348,8 +348,42 @@ document.addEventListener('click', (e) => {
     }
 });
 
+// --- Legacy domain migration notice ---
+
+const LEGACY_HOSTNAMES = ['chzzk-statistics-dock.pages.dev'];
+const NEW_DOCK_URL = 'https://cheese-stick-dock.pages.dev';
+
+function setupMigrationNotice() {
+    if (!LEGACY_HOSTNAMES.includes(window.location.hostname)) return;
+
+    const modal = document.getElementById('migration-modal');
+    const oldHostEl = document.getElementById('migration-old-host');
+    const copyBtn = document.getElementById('migration-copy-btn');
+    const dismissBtn = document.getElementById('migration-dismiss-btn');
+    if (!modal) return;
+
+    if (oldHostEl) oldHostEl.textContent = window.location.hostname;
+    modal.classList.remove('is-hidden');
+
+    copyBtn?.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(NEW_DOCK_URL);
+            copyBtn.textContent = '복사됨!';
+            setTimeout(() => { copyBtn.textContent = '복사'; }, 2000);
+        } catch (_e) {
+            copyBtn.textContent = '실패';
+            setTimeout(() => { copyBtn.textContent = '복사'; }, 2000);
+        }
+    });
+
+    dismissBtn?.addEventListener('click', () => {
+        modal.classList.add('is-hidden');
+    });
+}
+
 // --- Initialization ---
 function initialize() {
+    setupMigrationNotice();
     setupHideValuesFeature(state);
 
     // localStorage의 channelId는 단순 UI 힌트이므로, 형식 검증을 통과한 경우에만 임시 표시용으로 사용합니다.

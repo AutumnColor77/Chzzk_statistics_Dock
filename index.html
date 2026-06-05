@@ -109,6 +109,22 @@
 
     </div>
 
+    <div id="migration-modal" class="migration-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="migration-modal-title">
+        <div class="migration-modal__backdrop"></div>
+        <div class="migration-modal__card glass-panel">
+            <h2 id="migration-modal-title" class="migration-modal__title">주소가 변경되었습니다</h2>
+            <p class="migration-modal__desc">
+                OBS 브라우저 소스 URL을 아래 주소로<br>변경해 주세요.
+            </p>
+            <div class="migration-modal__url-box">
+                <code id="migration-new-url">https://cheese-stick-dock.pages.dev</code>
+                <button type="button" id="migration-copy-btn" class="migration-modal__copy-btn" title="주소 복사">복사</button>
+            </div>
+            <p class="migration-modal__hint">기존 주소(<span id="migration-old-host"></span>)는 곧 종료될 예정입니다.</p>
+            <button type="button" id="migration-dismiss-btn" class="chzzk-btn">확인했습니다</button>
+        </div>
+    </div>
+
     <script type="module" src="js/main.js"></script>
 </body>
 
