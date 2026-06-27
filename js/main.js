@@ -1,6 +1,6 @@
 import { state, globals, MAX_HISTORY_LENGTH } from './state.js';
 import { fetchLiveStatus, fetchUserChannel, fetchLiveSettings, updateLiveSettings, searchCategories } from './api.js';
-import { login, logout, setupAuthListener } from './auth.js';
+import { login, logout, handleOAuthReturn } from './auth.js';
 import { dom, updateUi, updateAuthUi, renderCategoryResults, setupHideValuesFeature } from './ui.js';
 
 // --- Polling Configuration (Jitter) ---
@@ -274,8 +274,6 @@ dom.refreshStatsBtn.addEventListener('click', async () => {
         dom.refreshStatsBtn.classList.remove('refreshing');
     }, 5000);
 });
-setupAuthListener(handleAuthSuccess);
-
 dom.saveSettingsBtn.addEventListener('click', async () => {
     const title = dom.liveTitleInput.value.trim();
     const categoryType = dom.categoryTypeSelect.value;
@@ -396,6 +394,8 @@ function initialize() {
             localStorage.removeItem('chzzkChannelId');
         }
     } catch (_e) {}
+
+    if (handleOAuthReturn(handleAuthSuccess)) return;
 
     updateAuthUi(false, state);
     handleLogin();

@@ -13,40 +13,6 @@ import {
   withNoStore
 } from '../../_lib/security.js';
 
-/**
- * OAuth 콜백 응답 HTML.
- * 인라인 스크립트를 사용하지 않고 별도 모듈(/js/auth-callback.js)을 로드합니다.
- * 이를 통해 콜백 응답에 'unsafe-inline' 없는 엄격한 CSP를 적용할 수 있습니다.
- */
-const CALLBACK_HTML = `<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Authentication Successful</title>
-  <link rel="stylesheet" href="/style.css">
-</head>
-<body class="callback-body">
-  <main class="callback-card" role="status" aria-live="polite">
-    <p class="callback-title">로그인 처리 중...</p>
-    <p class="callback-desc">이 창이 자동으로 닫히지 않으면 직접 닫아주세요.</p>
-    <p class="callback-fallback"><a href="/">Cheese Stick Dock으로 돌아가기</a></p>
-  </main>
-  <script src="/js/auth-callback.js"></script>
-</body>
-</html>`;
-
-const CALLBACK_CSP = [
-  "default-src 'none'",
-  "script-src 'self'",
-  "style-src 'self'",
-  "img-src 'self' data:",
-  "connect-src 'self'",
-  "base-uri 'none'",
-  "form-action 'none'",
-  "frame-ancestors 'none'"
-].join('; ');
-
 export async function onRequest(context) {
   const { env, request } = context;
 
@@ -138,9 +104,7 @@ export async function onRequest(context) {
     );
   }
 
-  const headers = new Headers({ 'Content-Type': 'text/html; charset=UTF-8' });
-  // 콜백 응답에는 'unsafe-inline' 없는 엄격한 CSP를 직접 부여.
-  headers.set('Content-Security-Policy', CALLBACK_CSP);
+  const headers = new Headers({ Location: '/?oauth_complete=1' });
   appendSetCookie(headers, 'oauth_state=; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=0');
   clearSessionCookies(headers);
   attachSessionCookies(headers, session);
@@ -148,5 +112,5 @@ export async function onRequest(context) {
   applyDefaultSecurityHeaders(headers);
 
   logSecurityEvent('oauth_login_success', { path: safePath(request) });
-  return new Response(CALLBACK_HTML, { headers });
+  return new Response(null, { status: 302, headers });
 }

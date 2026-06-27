@@ -1,6 +1,6 @@
 # Cheese Stick Dock
 
-현재 버전: **v0.4.1**
+현재 버전: **v0.4.2**
 
 **Cheese Stick Dock**은 치지직 스트리머를 위한 설정 관리 & 방송 통계 독(Dock) 애플리케이션입니다.  
 동시 시청자 수, 최고/평균 시청자, 팔로워를 실시간으로 표시하고, 방송 제목/카테고리/태그를 방송 중에도 손쉽게 변경할 수 있습니다.
@@ -46,12 +46,11 @@
 - 인증 토큰은 브라우저 `localStorage`/`sessionStorage`에 **절대 저장하지 않습니다**. 서버가 KV(`SESSION_STORE` 권장)에 저장하고, 클라이언트에는 `HttpOnly + Secure + SameSite=Lax` 세션 쿠키만 전달합니다.
 - 세션 ID는 256bit 무작위(`crypto.getRandomValues`), CSRF 토큰은 192bit. CSRF 비교는 **timing-safe**.
 - OAuth `state`는 `HttpOnly + Path=/api/auth` 쿠키에 저장한 256bit 무작위 값으로, 콜백에서 timing-safe 검증.
-- 콜백 페이지는 외부 JS 모듈(`/js/auth-callback.js`)을 로드하며, 응답에 **`'unsafe-inline'` 없는** 엄격한 CSP(`default-src 'none'`)를 직접 부여합니다.
+- 콜백 성공 시 세션 쿠키를 설정한 뒤 **`/?oauth_complete=1`로 리다이렉트**합니다. 별도 팝업·`window.close()`에 의존하지 않습니다.
 
-### OAuth 팝업 로그인 (v0.4.1)
-- 메인 창에서 `window.open`으로 `/api/auth/login` 팝업을 연 뒤, 치지직 연동 완료 시 콜백 페이지(`/api/auth/callback`)가 메인 창에 성공을 알립니다.
-- 통지 경로: `postMessage`(동일 origin) + `BroadcastChannel`(`cheese-stick-dock-auth`) 이중화. 메인 창은 인증 성공 시 **보관 중인 팝업 참조로 `close()`**를 호출해 창이 남지 않도록 합니다.
-- `Cross-Origin-Opener-Policy`는 `same-origin-allow-popups`를 사용합니다. OAuth 중 팝업이 치지직(외부 origin)을 거쳐도 opener와의 통신·닫기가 끊기지 않도록 하며, `noopener`는 사용하지 않습니다(콜백 → opener `postMessage` 유지).
+### OAuth 로그인 (v0.4.2~)
+- **같은 탭 리다이렉트**: 연동 버튼 → 치지직 로그인 → 콜백 → 메인 페이지(`/?oauth_complete=1`)로 복귀 후 대시보드 표시.
+- 브라우저가 OAuth 팝업의 `window.close()`를 막는 환경에서도 안정적으로 동작합니다.
 
 ### CSRF / Origin 이중 방어
 - 상태 변경 API(`PATCH /api/lives/setting`, `POST /api/auth/revoke`)는 다음을 모두 통과해야 합니다.
@@ -108,7 +107,7 @@
 3. `ALLOWED_ORIGIN`을 본인의 배포 도메인으로 명시 설정(여러 개는 공백 구분).
 4. **HTTPS 환경에서만 배포** (`Secure` 쿠키, HSTS).
 5. (권장) Cloudflare WAF에서 `/api/*`에 대한 Rate Limiting Rules 또는 Turnstile 적용으로 KV 카운터의 race condition 한계를 보완.
-6. 배포 후 **OAuth 팝업 로그인**(팝업 자동 닫힘·대시보드 전환)/새로고침/로그아웃/설정변경 시나리오 점검.
+6. 배포 후 **OAuth 로그인**(치지직 연동 → 메인 대시보드 전환)/새로고침/로그아웃/설정변경 시나리오 점검.
 7. 이슈 발생 시 세션 KV 키(`session:*`) 삭제 후 재검증, 토큰 폐기는 치지직 개발자 센터에서도 강제 만료 가능.
 8. `console.log`(`[security] ...`) 모니터링 항목: `oauth_state_mismatch`, `csrf_validation_failed*`, `origin_validation_failed_*`, `rate_limit_*`, `*_unauthenticated`, `*_misconfigured`, `session_store_missing`.
 
@@ -185,8 +184,7 @@ Cheese-Stick-Dock/
 ├── js/                         # 클라이언트 JS 모듈
 │   ├── main.js                 # 진입점 (Jitter 폴링 및 상태 관리)
 │   ├── api.js                  # API 통신 (LocalStorage 폴백 & CSRF 헤더 강제)
-│   ├── auth.js                 # OAuth 팝업 참조·자동 닫기, BroadcastChannel/postMessage 리스너
-│   ├── auth-callback.js        # OAuth 콜백: opener·BroadcastChannel 통지 후 window.close()
+│   ├── auth.js                 # OAuth 리다이렉트 로그인 및 oauth_complete 복귀 처리
 │   ├── ui.js                   # UI 갱신·카테고리 자동완성 등 (XSS 안전)
 │   └── state.js                # 전역 상태 (dataSource 및 로컬 상태 정리)
 └── functions/
