@@ -178,8 +178,23 @@ export async function verifyAdminProof(sessionId, proof, env) {
 }
 
 /**
+ * 예전 세션에 HMAC proof가 없으면 현재 ADMIN_SECRET으로 한 번 채워 넣습니다.
+ * 시크릿이 바뀌어 proof가 틀린 경우는 건드리지 않습니다(재로그인 필요).
+ */
+export async function ensureAdminProof(env, session) {
+  if (!session?.sessionId || !session.data) return session;
+  if (typeof session.data.adminProof === 'string' && session.data.adminProof) return session;
+  const proof = await signAdminProof(session.sessionId, env);
+  if (!proof) return session;
+  session.data.adminProof = proof;
+  await updateSession(env, session.sessionId, { adminProof: proof });
+  return session;
+}
+
+/**
  * 관리자 인가: ADMIN_SECRET 스키마 + (헤더 시크릿 또는 세션 HMAC proof).
  * 채널 ID 일치 여부는 호출 측에서 추가로 검사합니다.
+ * ADMIN_SECRET이 없으면 채널 ID 검사만으로 운영자 여부를 판단합니다.
  */
 export async function authorizeAdminSecret(request, env, session) {
   const schema = validateEnvSchema(env, ADMIN_ENV_KEYS);
@@ -187,13 +202,14 @@ export async function authorizeAdminSecret(request, env, session) {
 
   if (!schema.ok) {
     await verifyAdminSecret(headerSecret || 'missing', env);
-    return false;
+    return true;
   }
 
   if (headerSecret) {
     return verifyAdminSecret(headerSecret, env);
   }
 
+  await ensureAdminProof(env, session);
   return verifyAdminProof(session?.sessionId, session?.data?.adminProof, env);
 }
 

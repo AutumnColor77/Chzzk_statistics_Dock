@@ -10,6 +10,7 @@ const ui = {
     forbidden: document.getElementById('admin-forbidden'),
     dashboard: document.getElementById('admin-dashboard'),
     loginBtn: document.getElementById('admin-login-btn'),
+    reloginBtn: document.getElementById('admin-relogin-btn'),
     refreshBtn: document.getElementById('admin-refresh-btn'),
     dau: document.getElementById('metric-dau'),
     visits: document.getElementById('metric-visits'),
@@ -176,9 +177,12 @@ function cleanOAuthReturn() {
     window.history.replaceState(null, '', window.location.pathname || '/admin');
 }
 
-ui.loginBtn?.addEventListener('click', () => {
+function startAdminLogin() {
     window.location.assign('/api/auth/login?next=/admin');
-});
+}
+
+ui.loginBtn?.addEventListener('click', startAdminLogin);
+ui.reloginBtn?.addEventListener('click', startAdminLogin);
 
 ui.refreshBtn?.addEventListener('click', async () => {
     if (!ui.refreshBtn || ui.refreshBtn.disabled) return;

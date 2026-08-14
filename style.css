@@ -694,6 +694,12 @@ select.modern-input {
     box-sizing: border-box;
 }
 
+.admin-forbidden-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
 .admin-dashboard {
     display: flex;
     flex-direction: column;

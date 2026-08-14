@@ -1,4 +1,4 @@
-import { getEnvValue, timingSafeEqual, updateSession } from './security.js';
+import { timingSafeEqual, updateSession } from './security.js';
 
 export const CHANNEL_ID_PATTERN = /^[a-f0-9]{10,64}$/i;
 
@@ -70,25 +70,29 @@ async function hashChannelId(channelId) {
   return toHex(buf).slice(0, 32);
 }
 
+function adminChannelAllowList(raw) {
+  const text = String(raw || '').trim().toLowerCase().replace(/["']/g, '');
+  const found = text.match(/[a-f0-9]{10,64}/g) || [];
+  return found.filter((value) => CHANNEL_ID_PATTERN.test(value));
+}
+
 export async function isAdminChannelId(channelId, env) {
-  const raw = (env.ADMIN_CHANNEL_ID || '').trim().toLowerCase();
+  const allowed = adminChannelAllowList(env.ADMIN_CHANNEL_ID);
   const id = typeof channelId === 'string' && CHANNEL_ID_PATTERN.test(channelId)
     ? channelId.toLowerCase()
     : '';
-  if (!raw || !id) {
+  if (!allowed.length || !id) {
     await timingSafeEqual(id || '0', '1');
     return false;
   }
-  for (const allowed of raw.split(/\s+/).filter(Boolean)) {
-    if (await timingSafeEqual(allowed, id)) return true;
+  for (const candidate of allowed) {
+    if (await timingSafeEqual(candidate, id)) return true;
   }
   return false;
 }
 
 export function isAdminConfigured(env) {
-  const hasChannel = (env.ADMIN_CHANNEL_ID || '').trim().length > 0;
-  const hasSecret = Boolean(getEnvValue(env, 'ADMIN_SECRET'));
-  return hasChannel && hasSecret;
+  return adminChannelAllowList(env.ADMIN_CHANNEL_ID).length > 0;
 }
 
 /**

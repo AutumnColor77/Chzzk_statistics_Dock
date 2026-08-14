@@ -1,5 +1,4 @@
 import {
-  ADMIN_ENV_KEYS,
   applyDefaultSecurityHeaders,
   authorizeAdminSecret,
   checkRateLimit,
@@ -9,8 +8,7 @@ import {
   jsonResponse,
   logSecurityEvent,
   requireAllowedMethods,
-  safePath,
-  validateEnvSchema
+  safePath
 } from '../../_lib/security.js';
 import {
   isAdminChannelId,
@@ -57,9 +55,8 @@ export async function onRequest(context) {
     });
   }
 
-  // 미설정·비운영자 모두 동일한 403 — 설정 여부/운영자 존재를 응답으로 구분하지 않음.
-  const envCheck = validateEnvSchema(env, ADMIN_ENV_KEYS);
-  if (!envCheck.ok || !isAdminConfigured(env)) {
+  // 채널 ID 미설정·비운영자는 동일한 403. HMAC 실패는 재로그인(401)로 구분.
+  if (!isAdminConfigured(env)) {
     logSecurityEvent('admin_metrics_misconfigured', { path: safePath(request) });
     return forbidden(request, env);
   }
@@ -67,7 +64,9 @@ export async function onRequest(context) {
   const secretOk = await authorizeAdminSecret(request, env, session);
   if (!secretOk) {
     logSecurityEvent('admin_metrics_secret_denied', { path: safePath(request) });
-    return forbidden(request, env);
+    return jsonResponse({ message: 'Unauthorized' }, {
+      status: 401, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+    });
   }
 
   const channelId = await resolveSessionChannelId(env, session);

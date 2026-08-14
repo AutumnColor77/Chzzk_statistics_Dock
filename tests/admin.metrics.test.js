@@ -64,6 +64,75 @@ describe('GET /api/admin/metrics', () => {
     expect(body.days.length).toBe(30);
     expect(JSON.stringify(body)).not.toMatch(TEST_CHANNEL_ID);
   });
+
+  it('allows a browser session with HMAC proof and no admin header', async () => {
+    const session = await createSession(env, {
+      accessToken: 'ci-placeholder-access',
+      channelId: TEST_CHANNEL_ID
+    });
+    const response = await adminMetrics(createContext(
+      apiRequest('/api/admin/metrics', {
+        headers: { Cookie: `chzzk_session=${session.sessionId}` }
+      }),
+      env
+    ));
+    expect(response.status).toBe(200);
+  });
+
+  it('heals a pre-secret session missing adminProof', async () => {
+    const session = await createSession(env, {
+      accessToken: 'ci-placeholder-access',
+      channelId: TEST_CHANNEL_ID
+    });
+    const key = `session:${session.sessionId}`;
+    const stored = JSON.parse(await env.SESSION_STORE.get(key));
+    delete stored.adminProof;
+    await env.SESSION_STORE.put(key, JSON.stringify(stored));
+
+    const response = await adminMetrics(createContext(
+      apiRequest('/api/admin/metrics', {
+        headers: { Cookie: `chzzk_session=${session.sessionId}` }
+      }),
+      env
+    ));
+    expect(response.status).toBe(200);
+  });
+});
+
+describe('GET /api/admin/metrics channel matching', () => {
+  it('accepts a Chzzk URL in ADMIN_CHANNEL_ID', async () => {
+    const { mf, env } = await createTestEnv({
+      ADMIN_CHANNEL_ID: `https://chzzk.naver.com/${TEST_CHANNEL_ID}`
+    });
+    const session = await createSession(env, {
+      accessToken: 'ci-placeholder-access',
+      channelId: TEST_CHANNEL_ID
+    });
+    const response = await adminMetrics(createContext(
+      apiRequest('/api/admin/metrics', {
+        headers: { Cookie: `chzzk_session=${session.sessionId}` }
+      }),
+      env
+    ));
+    expect(response.status).toBe(200);
+    await mf.dispose();
+  });
+
+  it('still allows the matching channel when ADMIN_SECRET is unset', async () => {
+    const { mf, env } = await createTestEnv({ ADMIN_SECRET: '' });
+    const session = await createSession(env, {
+      accessToken: 'ci-placeholder-access',
+      channelId: TEST_CHANNEL_ID
+    });
+    const response = await adminMetrics(createContext(
+      apiRequest('/api/admin/metrics', {
+        headers: { Cookie: `chzzk_session=${session.sessionId}` }
+      }),
+      env
+    ));
+    expect(response.status).toBe(200);
+    await mf.dispose();
+  });
 });
 
 describe('metrics shard writes', () => {
