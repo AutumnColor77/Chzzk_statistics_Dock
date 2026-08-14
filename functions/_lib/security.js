@@ -559,35 +559,63 @@ export async function validateCsrf(request, sessionData) {
 // Origin / Same-Site 검증
 // ---------------------------------------------------------------------------
 
+function normalizeOrigin(value) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === 'null') return '';
+  try {
+    return new URL(trimmed).origin;
+  } catch (_e) {
+    return trimmed.replace(/\/+$/, '');
+  }
+}
+
+function requestOrigin(request) {
+  try {
+    return new URL(request.url).origin;
+  } catch (_e) {
+    return '';
+  }
+}
+
 /**
- * 환경변수 ALLOWED_ORIGIN(공백 구분으로 다중 허용) 또는 요청 origin을 폴백 사용.
- * 단일 도메인 운영 시에는 ALLOWED_ORIGIN을 반드시 설정하세요.
+ * 환경변수 ALLOWED_ORIGIN(공백 구분으로 다중 허용) + 이 API 호스트(동일 출처).
+ * 끝 슬래시·경로가 있어도 origin만 비교합니다.
  */
 export function getAllowedOrigins(request, env) {
-  const raw = (env.ALLOWED_ORIGIN || '').trim();
-  if (raw) {
-    return raw.split(/\s+/).filter(Boolean);
+  const host = requestOrigin(request);
+  const fromEnv = (env.ALLOWED_ORIGIN || '')
+    .trim()
+    .split(/\s+/)
+    .map(normalizeOrigin)
+    .filter(Boolean);
+  const allowed = [];
+  if (host) allowed.push(host);
+  for (const origin of fromEnv) {
+    if (!allowed.includes(origin)) allowed.push(origin);
   }
-  return [new URL(request.url).origin];
+  return allowed;
 }
 
 export function resolveAllowedOrigin(request, env) {
   const allowed = getAllowedOrigins(request, env);
-  const origin = request.headers.get('Origin');
+  const origin = normalizeOrigin(request.headers.get('Origin') || '');
   if (origin && allowed.includes(origin)) return origin;
   return allowed[0];
 }
 
 /**
- * 상태를 변경하는 요청(POST/PATCH/PUT/DELETE)에 대한 엄격한 Origin 검증.
- * Origin 헤더가 없거나 허용 목록에 없으면 false.
+ * 상태를 변경하는 요청(POST/PATCH/PUT/DELETE)에 대한 Origin 검증.
+ * 이 호스트로의 same-origin 요청은 항상 허용합니다 (ALLOWED_ORIGIN 오설정·OBS CEF 대비).
  */
 export function isAllowedMutationOrigin(request, env) {
   const allowed = getAllowedOrigins(request, env);
-  const origin = request.headers.get('Origin');
+  const origin = normalizeOrigin(request.headers.get('Origin') || '');
   if (origin) return allowed.includes(origin);
 
-  // Origin 헤더가 없는 경우 Referer로 폴백 (구형 브라우저 호환)
+  const fetchSite = request.headers.get('Sec-Fetch-Site');
+  if (fetchSite === 'same-origin') return true;
+
   const referer = request.headers.get('Referer');
   if (referer) {
     try {

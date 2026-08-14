@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { onRequest as login } from '../functions/api/auth/login.js';
-import { createCsrfState, validateCsrfState, validateEnvSchema } from '../functions/_lib/security.js';
+import { createCsrfState, isAllowedMutationOrigin, validateCsrfState, validateEnvSchema } from '../functions/_lib/security.js';
 import { apiRequest, createContext, createTestEnv } from './helpers.js';
 
 describe('GET /api/auth/login', () => {
@@ -74,5 +74,30 @@ describe('env schema', () => {
     const result = validateEnvSchema({}, ['CLIENT_ID', 'CLIENT_SECRET']);
     expect(result.ok).toBe(false);
     expect(result.missing).toEqual(['CLIENT_ID', 'CLIENT_SECRET']);
+  });
+});
+
+describe('mutation origin', () => {
+  it('allows same-origin PATCH even if ALLOWED_ORIGIN is a different host', () => {
+    const request = apiRequest('/api/lives/setting', { method: 'PATCH' });
+    expect(isAllowedMutationOrigin(request, {
+      ALLOWED_ORIGIN: 'https://other.example'
+    })).toBe(true);
+  });
+
+  it('allows OBS-style requests with Sec-Fetch-Site same-origin and no Origin', () => {
+    const request = new Request('https://cheese-stick-dock.pages.dev/api/lives/setting', {
+      method: 'PATCH',
+      headers: { 'Sec-Fetch-Site': 'same-origin', 'CF-Connecting-IP': '203.0.113.9' }
+    });
+    expect(isAllowedMutationOrigin(request, { ALLOWED_ORIGIN: 'https://other.example' })).toBe(true);
+  });
+
+  it('rejects cross-site Origin', () => {
+    const request = apiRequest('/api/lives/setting', {
+      method: 'PATCH',
+      origin: 'https://evil.example'
+    });
+    expect(isAllowedMutationOrigin(request, { ALLOWED_ORIGIN: 'https://cheese-stick-dock.pages.dev' })).toBe(false);
   });
 });
