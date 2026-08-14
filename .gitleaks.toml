@@ -1,0 +1,18 @@
+title = "cheese-stick-dock"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "CI placeholders, lockfiles, and empty env templates"
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)\.git/'''
+]
+regexTarget = "match"
+regexes = [
+  '''ci-placeholder-''',
+  '''CHZZK_CLIENT_(ID|SECRET)=""''',
+  '''ADMIN_SECRET=""'''
+]

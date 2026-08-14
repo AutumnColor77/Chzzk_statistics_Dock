@@ -1,5 +1,6 @@
 import {
   applyDefaultSecurityHeaders,
+  AUTH_ENV_KEYS,
   checkRateLimit,
   clearSessionCookies,
   corsHeaders,
@@ -9,6 +10,7 @@ import {
   jsonResponse,
   logSecurityEvent,
   requireAllowedMethods,
+  requireEnv,
   safePath,
   validateCsrf,
   withNoStore
@@ -23,11 +25,12 @@ export async function onRequest(context) {
   const methodErr = requireAllowedMethods(request, ['POST']);
   if (methodErr) return methodErr;
 
-  const limit = await checkRateLimit(env, request, 'auth_revoke', 20, 60);
+  const limit = await checkRateLimit(env, request, 'auth_revoke', 10, 60, { subwindowSeconds: 10 });
   if (!limit.allowed) {
     logSecurityEvent('rate_limit_auth_revoke', { path: safePath(request) });
     return jsonResponse({ success: false, message: 'Too many requests' }, {
-      status: 429, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+      status: 429, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS,
+      retryAfter: limit.retryAfter || 60
     });
   }
 
@@ -39,19 +42,16 @@ export async function onRequest(context) {
     });
   }
 
-  const clientId = env.CHZZK_CLIENT_ID;
-  const clientSecret = env.CHZZK_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
-    logSecurityEvent('auth_revoke_misconfigured', { path: safePath(request) });
-    return jsonResponse({ success: false, message: 'Server configuration error' }, {
-      status: 503, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
-    });
-  }
+  const envCheck = requireEnv(env, AUTH_ENV_KEYS, request, {
+    json: true, status: 503, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+  });
+  if (!envCheck.ok) return envCheck.error;
+  const { CLIENT_ID: clientId, CLIENT_SECRET: clientSecret } = envCheck.values;
 
   const session = await getSession(env, request);
 
   // 세션이 존재하면 CSRF 토큰을 반드시 검증.
-  if (session?.data && !validateCsrf(request, session.data)) {
+  if (session?.data && !(await validateCsrf(request, session.data))) {
     logSecurityEvent('csrf_validation_failed_revoke', { path: safePath(request) });
     return jsonResponse({ success: false, message: 'Invalid CSRF token' }, {
       status: 403, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS

@@ -108,7 +108,7 @@ export async function onRequest(context) {
     });
   }
 
-  if (request.method === 'PATCH' && !validateCsrf(request, session.data)) {
+  if (request.method === 'PATCH' && !(await validateCsrf(request, session.data))) {
     logSecurityEvent('csrf_validation_failed', { path: safePath(request) });
     return jsonResponse({ message: 'Invalid CSRF token' }, {
       status: 403, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS

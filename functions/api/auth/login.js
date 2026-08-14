@@ -1,10 +1,14 @@
 import {
-  appendSetCookie,
   applyDefaultSecurityHeaders,
+  attachOAuthNextCookie,
+  attachOAuthStateCookie,
   checkRateLimit,
+  createCsrfState,
   logSecurityEvent,
-  randomToken,
+  rateLimitedTextResponse,
   requireAllowedMethods,
+  requireEnv,
+  AUTH_ENV_KEYS,
   safePath,
   withNoStore
 } from '../../_lib/security.js';
@@ -25,23 +29,20 @@ export async function onRequest(context) {
   const methodErr = requireAllowedMethods(request, ['GET']);
   if (methodErr) return methodErr;
 
-  const limit = await checkRateLimit(env, request, 'auth_login', 20, 60);
+  const limit = await checkRateLimit(env, request, 'auth_login', 10, 60, { subwindowSeconds: 10 });
   if (!limit.allowed) {
     logSecurityEvent('rate_limit_auth_login', { path: safePath(request) });
-    return new Response('Too Many Requests', { status: 429 });
+    return rateLimitedTextResponse(limit.retryAfter || 60);
   }
 
-  const clientId = env.CHZZK_CLIENT_ID;
-  if (!clientId) {
-    logSecurityEvent('auth_login_misconfigured', { path: safePath(request) });
-    // 환경변수 이름은 노출하지 않습니다.
-    return new Response('Server configuration error', { status: 503 });
-  }
+  const envCheck = requireEnv(env, AUTH_ENV_KEYS, request, { json: false, status: 503 });
+  if (!envCheck.ok) return envCheck.error;
 
+  const clientId = envCheck.values.CLIENT_ID;
   const url = new URL(request.url);
   const redirectUri = `${url.origin}/api/auth/callback`;
-  // 256bit 무작위 state — UUID보다 강한 엔트로피.
-  const state = randomToken(32);
+  // 생성 시각이 포함된 CSRF state — 콜백에서 5분 TTL 검증.
+  const state = createCsrfState();
 
   const authUrl = new URL('https://chzzk.naver.com/account-interlock');
   authUrl.searchParams.set('clientId', clientId);
@@ -49,22 +50,8 @@ export async function onRequest(context) {
   authUrl.searchParams.set('state', state);
 
   const headers = new Headers({ 'Location': authUrl.toString() });
-  appendSetCookie(
-    headers,
-    `oauth_state=${state}; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=600`
-  );
-  const nextPath = resolveOAuthNextPath(request);
-  if (nextPath) {
-    appendSetCookie(
-      headers,
-      `oauth_next=${encodeURIComponent(nextPath)}; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=600`
-    );
-  } else {
-    appendSetCookie(
-      headers,
-      'oauth_next=; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=0'
-    );
-  }
+  attachOAuthStateCookie(headers, state);
+  attachOAuthNextCookie(headers, resolveOAuthNextPath(request));
   withNoStore(headers);
   applyDefaultSecurityHeaders(headers);
 

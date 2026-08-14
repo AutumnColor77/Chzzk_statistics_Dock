@@ -25,5 +25,11 @@ compatibility_flags = ["nodejs_compat"]
 # 로컬 개발 시 KV를 자동 에뮬레이션하려면:
 # wrangler pages dev . --kv LIVE_STATUS_CACHE --kv SESSION_STORE
 #
+# (선택) Workers Analytics Engine — 지표 write-only 경로.
+# 바인딩이 있으면 functions/_lib/metrics.js 가 METRICS.writeDataPoint() 로 이벤트를 보냅니다.
+# [[analytics_engine_datasets]]
+# binding = "METRICS"
+# dataset = "chzzk_dock_metrics"
+#
 # 프로덕션 배포 (Git 연동 대신 CLI 사용 시):
 # wrangler pages deploy . --project-name=cheese-stick-dock --branch=main

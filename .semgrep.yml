@@ -1,0 +1,37 @@
+rules:
+  - id: no-innerhtml
+    message: innerHTML/outerHTML is an XSS sink. Use textContent or createElement.
+    languages: [javascript]
+    severity: ERROR
+    pattern-either:
+      - pattern: $X.innerHTML = $Y
+      - pattern: $X.outerHTML = $Y
+      - pattern: $X.insertAdjacentHTML($A, $B)
+      - pattern: document.write($X)
+      - pattern: document.writeln($X)
+
+  - id: no-eval
+    message: eval / Function constructor is forbidden in this codebase.
+    languages: [javascript]
+    severity: ERROR
+    pattern-either:
+      - pattern: eval($X)
+      - pattern: new Function(...)
+
+  - id: no-hardcoded-chzzk-secret
+    message: Do not hardcode Chzzk or admin secrets. Use env bindings / Pages Secrets.
+    languages: [javascript]
+    severity: ERROR
+    pattern-either:
+      - pattern: CHZZK_CLIENT_SECRET = "..."
+      - pattern: ADMIN_SECRET = "..."
+      - pattern: env.CHZZK_CLIENT_SECRET = "..."
+
+  - id: workers-no-math-random-token
+    message: Do not use Math.random() for tokens or secrets.
+    languages: [javascript]
+    severity: WARNING
+    paths:
+      include:
+        - functions/**
+    pattern: Math.random(...)

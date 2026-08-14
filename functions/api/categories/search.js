@@ -1,5 +1,6 @@
 import {
   applyDefaultSecurityHeaders,
+  AUTH_ENV_KEYS,
   checkRateLimit,
   corsHeaders,
   getSession,
@@ -7,6 +8,7 @@ import {
   jsonResponse,
   logSecurityEvent,
   requireAllowedMethods,
+  requireEnv,
   safePath
 } from '../../_lib/security.js';
 
@@ -79,14 +81,11 @@ export async function onRequest(context) {
   }
 
   const query = rawQuery.trim();
-  const clientId = env.CHZZK_CLIENT_ID;
-  const clientSecret = env.CHZZK_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
-    logSecurityEvent('categories_search_misconfigured', { path: safePath(request) });
-    return jsonResponse({ code: 503, message: 'Server configuration error' }, {
-      status: 503, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
-    });
-  }
+  const envCheck = requireEnv(env, AUTH_ENV_KEYS, request, {
+    json: true, status: 503, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+  });
+  if (!envCheck.ok) return envCheck.error;
+  const { CLIENT_ID: clientId, CLIENT_SECRET: clientSecret } = envCheck.values;
 
   const kv = env.LIVE_STATUS_CACHE || env.SESSION_STORE || null;
   const cacheKey = `cat-search:${query.toLowerCase()}`;

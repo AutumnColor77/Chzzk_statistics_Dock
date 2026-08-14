@@ -4,37 +4,116 @@ import {
   corsHeaders,
   getSession,
   logSecurityEvent,
-  resolveAllowedOrigin,
   safePath
 } from '../_lib/security.js';
 
-// --- Configuration ---
-const FRESH_DURATION_MS = 25 * 1000;  // 25초: 캐시가 "신선"한 기간 (즉시 반환, 갱신 없음)
-const STALE_DURATION_MS = 60 * 1000;  // 60초: 이 기간 이후 캐시 완전 만료
-const KV_TTL_SECONDS = 120;           // KV 자동 만료 안전장치 (2분)
+const FRESH_DURATION_MS = 25 * 1000;
+const STALE_DURATION_MS = 60 * 1000;
+const KV_TTL_SECONDS = 120;
+const EDGE_CACHE_TTL_SECONDS = 15;
+const ORIGIN_MAX_RETRIES = 3;
+const ORIGIN_BACKOFF_CAP_MS = 4000;
 
-/** 공개 URL 노출 시 IP당 라이브 상태 조회 상한 (분당, KV·오리진 보호) */
 const RATE_LIMIT_PER_IP_PER_MIN = 120;
-/** force=true는 캐시 우회·오리진 직접 호출이므로 더 엄격히 */
 const RATE_LIMIT_FORCE_PER_IP_PER_MIN = 30;
 
 const ALLOW_METHODS = 'GET, OPTIONS';
 const CHANNEL_ID_PATTERN = /^[a-f0-9]{10,64}$/i;
+const ORIGIN_LIVE_STATUS = 'https://api.chzzk.naver.com/polling/v2/channels';
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseRetryAfterMs(header) {
+  if (!header) return 0;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(seconds * 1000, ORIGIN_BACKOFF_CAP_MS);
+  }
+  const when = Date.parse(header);
+  if (Number.isFinite(when)) {
+    return Math.min(Math.max(0, when - Date.now()), ORIGIN_BACKOFF_CAP_MS);
+  }
+  return 0;
+}
+
+function backoffDelayMs(attempt, retryAfterMs) {
+  if (retryAfterMs > 0) return retryAfterMs;
+  const base = Math.min(250 * (2 ** attempt), ORIGIN_BACKOFF_CAP_MS);
+  const jitter = crypto.getRandomValues(new Uint32Array(1))[0] % 120;
+  return base + jitter;
+}
+
+function cancelBody(response) {
+  if (response.body && typeof response.body.cancel === 'function') {
+    try { response.body.cancel(); } catch (_e) { /* ignore */ }
+  }
+}
 
 async function fetchFromOrigin(channelId) {
-  const apiUrl = `https://api.chzzk.naver.com/polling/v2/channels/${channelId}/live-status`;
-  const response = await fetch(apiUrl, {
-    headers: {
-      'Accept': 'application/json',
-      'User-Agent': 'cheese-stick-dock/1.0',
-    },
-  });
+  const apiUrl = `${ORIGIN_LIVE_STATUS}/${channelId}/live-status`;
+  let lastStatus = 0;
 
-  if (!response.ok) {
-    throw new Error(`Origin API error: ${response.status}`);
+  for (let attempt = 0; attempt <= ORIGIN_MAX_RETRIES; attempt++) {
+    const response = await fetch(apiUrl, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'cheese-stick-dock/1.0'
+      }
+    });
+    lastStatus = response.status;
+
+    if (response.status === 429) {
+      const retryAfterMs = parseRetryAfterMs(response.headers.get('Retry-After'));
+      cancelBody(response);
+      if (attempt === ORIGIN_MAX_RETRIES) {
+        const error = new Error('Origin API rate limited');
+        error.status = 429;
+        throw error;
+      }
+      await sleep(backoffDelayMs(attempt, retryAfterMs));
+      continue;
+    }
+
+    if (!response.ok) {
+      cancelBody(response);
+      throw new Error(`Origin API error: ${response.status}`);
+    }
+
+    return response.json();
   }
 
-  return response.json();
+  const error = new Error(`Origin API error: ${lastStatus || 502}`);
+  error.status = lastStatus || 502;
+  throw error;
+}
+
+function edgeCacheRequest(channelId) {
+  return new Request(`https://live-status.cache/api/live-status?channelId=${encodeURIComponent(channelId)}`, {
+    method: 'GET'
+  });
+}
+
+async function matchEdgeCache(channelId) {
+  try {
+    return await caches.default.match(edgeCacheRequest(channelId));
+  } catch (_e) {
+    return undefined;
+  }
+}
+
+async function putEdgeCache(channelId, data) {
+  const headers = new Headers({
+    'Content-Type': 'application/json; charset=UTF-8',
+    'Cache-Control': `public, max-age=${EDGE_CACHE_TTL_SECONDS}`
+  });
+  const response = new Response(JSON.stringify(data), { status: 200, headers });
+  try {
+    await caches.default.put(edgeCacheRequest(channelId), response);
+  } catch (_e) {
+    // Cache API 미지원 미리보기 등 — KV SWR이 폴백
+  }
 }
 
 function buildResponseHeaders(request, env, cacheStatus) {
@@ -46,35 +125,39 @@ function buildResponseHeaders(request, env, cacheStatus) {
   return headers;
 }
 
-function jsonRateLimited(request, env) {
+function jsonRateLimited(request, env, retryAfter = 60) {
   const headers = buildResponseHeaders(request, env, 'RATE_LIMITED');
-  headers.set('Retry-After', '60');
+  headers.set('Retry-After', String(retryAfter));
   return new Response(
     JSON.stringify({ code: 429, message: 'Too many requests. Try again later.' }),
     { status: 429, headers }
   );
 }
 
+function jsonBody(data, request, env, cacheStatus) {
+  return new Response(JSON.stringify(data), {
+    headers: buildResponseHeaders(request, env, cacheStatus)
+  });
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
 
   if (request.method !== 'GET') {
-    return new Response('Method Not Allowed', { status: 405, headers: { 'Allow': ALLOW_METHODS } });
+    return new Response('Method Not Allowed', { status: 405, headers: { Allow: ALLOW_METHODS } });
   }
 
   const requestUrl = new URL(request.url);
-  const { searchParams } = requestUrl;
-  const channelId = searchParams.get('channelId');
-  const force = searchParams.get('force') === 'true';
+  const channelId = requestUrl.searchParams.get('channelId');
+  const force = requestUrl.searchParams.get('force') === 'true';
 
   const limit = await checkRateLimit(env, request, 'live_status', RATE_LIMIT_PER_IP_PER_MIN, 60);
   if (!limit.allowed) {
     logSecurityEvent('rate_limit_live_status', { path: safePath(request) });
-    return jsonRateLimited(request, env);
+    return jsonRateLimited(request, env, limit.retryAfter || 60);
   }
 
   if (force) {
-    // force=true는 KV/오리진을 직접 두드리는 비싼 경로 → 인증된 사용자만 허용.
     const session = await getSession(env, request);
     if (!session?.data?.accessToken) {
       logSecurityEvent('force_refresh_unauthenticated', { path: safePath(request) });
@@ -88,7 +171,7 @@ export async function onRequest(context) {
     const forceLimit = await checkRateLimit(env, request, 'live_status_force', RATE_LIMIT_FORCE_PER_IP_PER_MIN, 60);
     if (!forceLimit.allowed) {
       logSecurityEvent('rate_limit_live_status_force', { path: safePath(request) });
-      return jsonRateLimited(request, env);
+      return jsonRateLimited(request, env, forceLimit.retryAfter || 60);
     }
   }
 
@@ -96,66 +179,79 @@ export async function onRequest(context) {
     return new Response('channelId query parameter is required', { status: 400 });
   }
 
-  // SSRF 방지: hex 문자열만 허용.
   if (!CHANNEL_ID_PATTERN.test(channelId)) {
     return new Response('Invalid channelId format', { status: 400 });
   }
 
-  const kv = env.LIVE_STATUS_CACHE;
-  if (!kv) {
-    const data = await fetchFromOrigin(channelId);
-    return new Response(JSON.stringify(data), {
-      headers: buildResponseHeaders(request, env, 'BYPASS')
-    });
+  if (!force) {
+    const edgeHit = await matchEdgeCache(channelId);
+    if (edgeHit) {
+      return new Response(edgeHit.body, {
+        status: 200,
+        headers: buildResponseHeaders(request, env, 'EDGE')
+      });
+    }
   }
 
-  // --- Stale-While-Revalidate ---
+  const kv = env.LIVE_STATUS_CACHE;
   const cacheKey = `live-status:${channelId}`;
   const now = Date.now();
 
+  const persist = (data, kvStatus) => {
+    context.waitUntil(putEdgeCache(channelId, data));
+    if (kv) {
+      context.waitUntil(
+        kv.put(cacheKey, JSON.stringify({ data, timestamp: Date.now() }), {
+          expirationTtl: KV_TTL_SECONDS
+        })
+      );
+    }
+    return jsonBody(data, request, env, kvStatus);
+  };
+
   try {
-    if (!force) {
+    if (!force && kv) {
       const cached = await kv.get(cacheKey, { type: 'json' });
-
-      if (cached && cached.timestamp) {
+      if (cached && cached.timestamp && cached.data) {
         const age = now - cached.timestamp;
-
         if (age < FRESH_DURATION_MS) {
-          return new Response(JSON.stringify(cached.data), {
-            headers: buildResponseHeaders(request, env, 'HIT')
-          });
+          context.waitUntil(putEdgeCache(channelId, cached.data));
+          return jsonBody(cached.data, request, env, 'HIT');
         }
-
         if (age < STALE_DURATION_MS) {
           context.waitUntil(refreshCache(kv, cacheKey, channelId));
-          return new Response(JSON.stringify(cached.data), {
-            headers: buildResponseHeaders(request, env, 'STALE')
-          });
+          return jsonBody(cached.data, request, env, 'STALE');
         }
       }
     }
 
     const freshData = await fetchFromOrigin(channelId);
-    const cacheEntry = { data: freshData, timestamp: Date.now() };
-    context.waitUntil(
-      kv.put(cacheKey, JSON.stringify(cacheEntry), { expirationTtl: KV_TTL_SECONDS })
-    );
+    return persist(freshData, force ? 'FORCE' : (kv ? 'MISS' : 'BYPASS'));
+  } catch (error) {
+    if (kv) {
+      try {
+        const fallback = await kv.get(cacheKey, { type: 'json' });
+        if (fallback?.data) {
+          return jsonBody(fallback.data, request, env, error?.status === 429 ? 'STALE_429' : 'ERROR');
+        }
+      } catch (_e) {
+        // ignore
+      }
+    }
 
-    return new Response(JSON.stringify(freshData), {
-      headers: buildResponseHeaders(request, env, force ? 'FORCE' : 'MISS')
-    });
-  } catch (_error) {
-    try {
-      const fallbackData = await fetchFromOrigin(channelId);
-      return new Response(JSON.stringify(fallbackData), {
-        headers: buildResponseHeaders(request, env, 'ERROR')
-      });
-    } catch (_originError) {
+    if (error?.status === 429) {
+      const headers = buildResponseHeaders(request, env, 'ORIGIN_429');
+      headers.set('Retry-After', '15');
       return new Response(
-        JSON.stringify({ code: 502, message: 'Both cache and origin failed' }),
-        { status: 502, headers: buildResponseHeaders(request, env, 'ERROR') }
+        JSON.stringify({ code: 429, message: 'Upstream rate limited. Try again shortly.' }),
+        { status: 429, headers }
       );
     }
+
+    return new Response(
+      JSON.stringify({ code: 502, message: 'Both cache and origin failed' }),
+      { status: 502, headers: buildResponseHeaders(request, env, 'ERROR') }
+    );
   }
 }
 
@@ -170,7 +266,10 @@ async function refreshCache(kv, cacheKey, channelId) {
   try {
     const freshData = await fetchFromOrigin(channelId);
     const cacheEntry = { data: freshData, timestamp: Date.now() };
-    await kv.put(cacheKey, JSON.stringify(cacheEntry), { expirationTtl: KV_TTL_SECONDS });
+    await Promise.all([
+      kv.put(cacheKey, JSON.stringify(cacheEntry), { expirationTtl: KV_TTL_SECONDS }),
+      putEdgeCache(channelId, freshData)
+    ]);
   } catch (_error) {
     // 백그라운드 갱신 실패는 무시 — 다음 요청에서 재시도
   }

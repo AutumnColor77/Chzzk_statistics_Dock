@@ -1,5 +1,7 @@
 import {
+  ADMIN_ENV_KEYS,
   applyDefaultSecurityHeaders,
+  authorizeAdminSecret,
   checkRateLimit,
   corsHeaders,
   getSession,
@@ -7,7 +9,8 @@ import {
   jsonResponse,
   logSecurityEvent,
   requireAllowedMethods,
-  safePath
+  safePath,
+  validateEnvSchema
 } from '../../_lib/security.js';
 import {
   isAdminChannelId,
@@ -17,8 +20,14 @@ import {
 } from '../../_lib/metrics.js';
 
 const ALLOW_METHODS = 'GET, OPTIONS';
-const ALLOW_HEADERS = 'Content-Type, X-CSRF-Token';
+const ALLOW_HEADERS = 'Content-Type, X-CSRF-Token, X-Admin-Secret';
 const FORBIDDEN_BODY = { message: 'Forbidden' };
+
+function forbidden(request, env) {
+  return jsonResponse(FORBIDDEN_BODY, {
+    status: 403, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+  });
+}
 
 export async function onRequest(context) {
   const { request, env } = context;
@@ -26,19 +35,18 @@ export async function onRequest(context) {
   const methodErr = requireAllowedMethods(request, ['GET']);
   if (methodErr) return methodErr;
 
-  const limit = await checkRateLimit(env, request, 'admin_metrics', 30, 60);
+  const limit = await checkRateLimit(env, request, 'admin_metrics', 20, 60, { subwindowSeconds: 10 });
   if (!limit.allowed) {
     logSecurityEvent('rate_limit_admin_metrics', { path: safePath(request) });
     return jsonResponse({ message: 'Too many requests' }, {
-      status: 429, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+      status: 429, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS,
+      retryAfter: limit.retryAfter || 60
     });
   }
 
   if (!isSafeFetchSite(request, env)) {
     logSecurityEvent('fetch_site_blocked_admin_metrics', { path: safePath(request) });
-    return jsonResponse(FORBIDDEN_BODY, {
-      status: 403, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
-    });
+    return forbidden(request, env);
   }
 
   const session = await getSession(env, request);
@@ -50,19 +58,22 @@ export async function onRequest(context) {
   }
 
   // 미설정·비운영자 모두 동일한 403 — 설정 여부/운영자 존재를 응답으로 구분하지 않음.
-  if (!isAdminConfigured(env)) {
+  const envCheck = validateEnvSchema(env, ADMIN_ENV_KEYS);
+  if (!envCheck.ok || !isAdminConfigured(env)) {
     logSecurityEvent('admin_metrics_misconfigured', { path: safePath(request) });
-    return jsonResponse(FORBIDDEN_BODY, {
-      status: 403, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
-    });
+    return forbidden(request, env);
+  }
+
+  const secretOk = await authorizeAdminSecret(request, env, session);
+  if (!secretOk) {
+    logSecurityEvent('admin_metrics_secret_denied', { path: safePath(request) });
+    return forbidden(request, env);
   }
 
   const channelId = await resolveSessionChannelId(env, session);
-  if (!channelId || !isAdminChannelId(channelId, env)) {
+  if (!channelId || !(await isAdminChannelId(channelId, env))) {
     logSecurityEvent('admin_metrics_forbidden', { path: safePath(request) });
-    return jsonResponse(FORBIDDEN_BODY, {
-      status: 403, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
-    });
+    return forbidden(request, env);
   }
 
   const metrics = await readDailyMetrics(env, 30);

@@ -1,15 +1,18 @@
 import {
-  appendSetCookie,
   applyDefaultSecurityHeaders,
   attachSessionCookies,
+  AUTH_ENV_KEYS,
   checkRateLimit,
+  clearOAuthCookies,
   clearSessionCookies,
   createSession,
   getCookie,
   logSecurityEvent,
+  rateLimitedTextResponse,
   requireAllowedMethods,
+  requireEnv,
   safePath,
-  timingSafeEqual,
+  validateCsrfState,
   withNoStore
 } from '../../_lib/security.js';
 
@@ -19,19 +22,16 @@ export async function onRequest(context) {
   const methodErr = requireAllowedMethods(request, ['GET']);
   if (methodErr) return methodErr;
 
-  const limit = await checkRateLimit(env, request, 'auth_callback', 30, 60);
+  const limit = await checkRateLimit(env, request, 'auth_callback', 12, 60, { subwindowSeconds: 10 });
   if (!limit.allowed) {
     logSecurityEvent('rate_limit_auth_callback', { path: safePath(request) });
-    return new Response('Too Many Requests', { status: 429 });
+    return rateLimitedTextResponse(limit.retryAfter || 60);
   }
 
-  const clientId = env.CHZZK_CLIENT_ID;
-  const clientSecret = env.CHZZK_CLIENT_SECRET;
+  const envCheck = requireEnv(env, AUTH_ENV_KEYS, request, { json: false, status: 503 });
+  if (!envCheck.ok) return envCheck.error;
 
-  if (!clientId || !clientSecret) {
-    logSecurityEvent('auth_callback_misconfigured', { path: safePath(request) });
-    return new Response('Server configuration error', { status: 500 });
-  }
+  const { CLIENT_ID: clientId, CLIENT_SECRET: clientSecret } = envCheck.values;
 
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
@@ -41,13 +41,12 @@ export async function onRequest(context) {
     return new Response('Invalid request', { status: 400 });
   }
 
-  // CSRF 방지: 쿠키에 저장된 state와 콜백 state를 timing-safe 비교.
+  // CSRF 방지: 쿠키 state와 콜백 state를 timing-safe 비교하고 5분 TTL을 강제.
   const savedState = getCookie('oauth_state', request);
-  if (!state || !savedState || !timingSafeEqual(state, savedState)) {
+  if (!state || !savedState || !(await validateCsrfState(state, savedState))) {
     logSecurityEvent('oauth_state_mismatch', { path: safePath(request) });
-    // 잘못된 state 쿠키를 즉시 제거.
     const headers = new Headers({ 'Content-Type': 'text/plain; charset=UTF-8' });
-    appendSetCookie(headers, 'oauth_state=; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=0');
+    clearOAuthCookies(headers);
     withNoStore(headers);
     applyDefaultSecurityHeaders(headers);
     return new Response('Invalid state parameter. Please retry login.', { status: 400, headers });
@@ -76,7 +75,9 @@ export async function onRequest(context) {
     return new Response('Authentication failed. Please try again.', { status: 502 });
   }
 
-  if (!tokenResponse.ok || !tokenData?.content?.accessToken) {
+  const accessToken = tokenData?.content?.accessToken;
+  const refreshToken = tokenData?.content?.refreshToken;
+  if (!tokenResponse.ok || typeof accessToken !== 'string' || !accessToken) {
     logSecurityEvent('oauth_login_failed', {
       path: safePath(request),
       status: tokenResponse.status
@@ -85,7 +86,9 @@ export async function onRequest(context) {
   }
 
   const session = await createSession(env, {
-    accessToken: tokenData.content.accessToken
+    accessToken,
+    refreshToken: typeof refreshToken === 'string' ? refreshToken : undefined,
+    expiresIn: Number(tokenData.content.expiresIn) || undefined
   });
   if (!session) {
     logSecurityEvent('session_store_missing', { path: safePath(request) });
@@ -110,8 +113,7 @@ export async function onRequest(context) {
     : '/?oauth_complete=1';
 
   const headers = new Headers({ Location: redirectPath });
-  appendSetCookie(headers, 'oauth_state=; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=0');
-  appendSetCookie(headers, 'oauth_next=; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=0');
+  clearOAuthCookies(headers);
   clearSessionCookies(headers);
   attachSessionCookies(headers, session);
   withNoStore(headers);

@@ -11,7 +11,7 @@ import {
   updateSession,
   withNoStore
 } from '../../_lib/security.js';
-import { extractChannelId, recordDailyActiveUser } from '../../_lib/metrics.js';
+import { extractChannelId, scheduleDailyActiveUser } from '../../_lib/metrics.js';
 
 const ALLOW_METHODS = 'GET, OPTIONS';
 const ALLOW_HEADERS = 'Content-Type, X-CSRF-Token';
@@ -25,7 +25,8 @@ export async function onRequest(context) {
   const limit = await checkRateLimit(env, request, 'users_me', 120, 60);
   if (!limit.allowed) {
     return jsonResponse({ message: 'Too many requests' }, {
-      status: 429, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+      status: 429, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS,
+      retryAfter: limit.retryAfter || 60
     });
   }
 
@@ -65,14 +66,10 @@ export async function onRequest(context) {
 
   const channelId = extractChannelId(payload);
   if (upstream.ok && channelId) {
-    context.waitUntil((async () => {
-      try {
-        await updateSession(env, session.sessionId, { channelId });
-        await recordDailyActiveUser(env, channelId);
-      } catch (_e) {
-        // 지표 기록 실패는 본 응답을 막지 않음
-      }
-    })());
+    context.waitUntil(
+      updateSession(env, session.sessionId, { channelId }).catch(() => {})
+    );
+    scheduleDailyActiveUser(context, env, channelId);
   }
 
   const headers = corsHeaders(request, env, { methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS });

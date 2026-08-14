@@ -1,21 +1,57 @@
-import { state, globals, MAX_HISTORY_LENGTH } from './state.js';
+import { state, globals, MAX_HISTORY_LENGTH, patchState } from './state.js';
 import { fetchLiveStatus, fetchUserChannel, fetchLiveSettings, updateLiveSettings, searchCategories } from './api.js';
 import { login, logout, handleOAuthReturn } from './auth.js';
 import { dom, updateUi, updateAuthUi, renderCategoryResults, setupHideValuesFeature } from './ui.js';
+import { setText } from './dom-safe.js';
 
-// --- Polling Configuration (Jitter) ---
-const BASE_INTERVAL_MS = 30000; // 기본 폴링 주기: 30초
-const JITTER_RANGE_MS = 5000;   // Jitter 범위: ±5초 → 실제 25~35초
+const BASE_INTERVAL_MS = 30000;
+const JITTER_RANGE_MS = 5000;
+const SETTINGS_POLL_INTERVAL_MS = 45000;
+const FETCH_TIMEOUT_MS = 12000;
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 30000;
 
-function getJitteredInterval() {
-    return BASE_INTERVAL_MS + (Math.random() * JITTER_RANGE_MS * 2 - JITTER_RANGE_MS);
+let lastKnownSettings = null;
+let reconnectAttempt = 0;
+let pollingPaused = false;
+
+function randomInt(maxExclusive) {
+    if (maxExclusive <= 0) return 0;
+    const buf = new Uint32Array(1);
+    crypto.getRandomValues(buf);
+    return buf[0] % maxExclusive;
 }
 
-// --- Settings Polling Configuration ---
-const SETTINGS_POLL_INTERVAL_MS = 45000; // 설정 폴링 주기: 45초
-let lastKnownSettings = null; // 마지막으로 알려진 설정값 (비교용)
+function getJitteredInterval() {
+    return BASE_INTERVAL_MS + randomInt(JITTER_RANGE_MS * 2 + 1) - JITTER_RANGE_MS;
+}
 
-// --- Core Data Fetching ---
+function nextBackoffMs() {
+    const exp = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * (2 ** reconnectAttempt));
+    reconnectAttempt = Math.min(reconnectAttempt + 1, 8);
+    return exp + randomInt(300);
+}
+
+function resetBackoff() {
+    reconnectAttempt = 0;
+}
+
+function withTimeout(promise, ms) {
+    let timer = 0;
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('timeout')), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function safeChannelName(payload) {
+    const content = payload && payload.content;
+    const raw = content && (content.channelName || content.nickname);
+    if (typeof raw !== 'string') return '';
+    const trimmed = raw.trim();
+    if (!trimmed) return '';
+    return trimmed.length > 80 ? trimmed.slice(0, 80) : trimmed;
+}
 
 async function fetchChzzkData(force = false) {
     if (!state.channelId) {
@@ -24,77 +60,82 @@ async function fetchChzzkData(force = false) {
     }
 
     const previousStatus = state.liveStatus;
+    const next = {};
 
     try {
-        const result = await fetchLiveStatus(state.channelId, force);
+        const result = await withTimeout(fetchLiveStatus(state.channelId, force), FETCH_TIMEOUT_MS);
         const data = result.data;
-        state.dataSource = result.source; // 'server' | 'local-cache'
+        next.dataSource = result.source;
+        next.uiError = null;
 
         if (data.code === 200) {
             const content = data.content || {};
-            state.liveStatus = content.status || 'CLOSE';
+            next.liveStatus = content.status || 'CLOSE';
 
-            if (state.liveStatus === 'OPEN') {
-                state.concurrentViewers = content.concurrentUserCount || 0;
-
-                // 최고 동시 시청자: localStorage에서 복원 + 현재값 비교
+            if (next.liveStatus === 'OPEN') {
+                next.concurrentViewers = content.concurrentUserCount || 0;
                 const storedPeak = parseInt(localStorage.getItem('chzzk_peak_viewers') || '0', 10);
-                state.peakViewers = Math.max(state.peakViewers, storedPeak, state.concurrentViewers);
-                localStorage.setItem('chzzk_peak_viewers', state.peakViewers.toString());
-
-                state.followers = content.followerCount || 0;
-                state.viewerHistory.push(state.concurrentViewers);
+                next.peakViewers = Math.max(state.peakViewers, storedPeak, next.concurrentViewers);
+                localStorage.setItem('chzzk_peak_viewers', next.peakViewers.toString());
+                next.followers = content.followerCount || 0;
+                state.viewerHistory.push(next.concurrentViewers);
                 if (state.viewerHistory.length > MAX_HISTORY_LENGTH) {
                     state.viewerHistory.shift();
                 }
             } else {
-                state.concurrentViewers = 0;
-                state.peakViewers = 0;
+                next.concurrentViewers = 0;
+                next.peakViewers = 0;
                 localStorage.removeItem('chzzk_peak_viewers');
-                state.followers = content.followerCount || state.followers;
+                next.followers = content.followerCount || state.followers;
             }
         } else {
-            state.liveStatus = 'CLOSE';
+            next.liveStatus = 'CLOSE';
         }
     } catch (_error) {
-        state.liveStatus = 'CLOSE';
-        state.dataSource = 'error';
+        next.liveStatus = 'CLOSE';
+        next.dataSource = 'error';
     }
 
-    if (previousStatus === 'OPEN' && state.liveStatus === 'CLOSE') {
+    if (previousStatus === 'OPEN' && next.liveStatus === 'CLOSE') {
         state.viewerHistory = [];
-        state.averageViewers = 0;
+        next.averageViewers = 0;
+    } else {
+        next.averageViewers = calculateAverageViewers();
     }
 
-    calculateAverageViewers();
-    updateUi(state);
+    patchState(next);
 }
 
 function calculateAverageViewers() {
-    if (state.viewerHistory.length === 0) {
-        state.averageViewers = 0;
-        return;
-    }
+    if (state.viewerHistory.length === 0) return 0;
     const sum = state.viewerHistory.reduce((acc, count) => acc + count, 0);
-    state.averageViewers = Math.round(sum / state.viewerHistory.length);
+    return Math.round(sum / state.viewerHistory.length);
 }
 
-function scheduleNextFetch() {
-    const interval = getJitteredInterval();
+function scheduleNextFetch(delayMs) {
+    stopFetching();
+    if (pollingPaused || !state.channelId) return;
+
+    const interval = typeof delayMs === 'number' ? delayMs : getJitteredInterval();
     globals.fetchTimeout = setTimeout(async () => {
+        globals.fetchTimeout = null;
+        if (pollingPaused || !state.channelId || navigator.onLine === false) return;
         await fetchChzzkData();
-        if (state.channelId) {
-            scheduleNextFetch();
+        if (pollingPaused || !state.channelId) return;
+        if (state.dataSource === 'error') {
+            scheduleNextFetch(nextBackoffMs());
+            return;
         }
+        resetBackoff();
+        scheduleNextFetch();
     }, interval);
 }
 
 function startFetching() {
     stopFetching();
-    if (state.channelId) {
-        fetchChzzkData();
-        scheduleNextFetch();
-    }
+    if (!state.channelId || pollingPaused) return;
+    fetchChzzkData();
+    scheduleNextFetch();
 }
 
 function stopFetching() {
@@ -104,40 +145,101 @@ function stopFetching() {
     }
 }
 
-// --- Auth Flows ---
+function pausePolling() {
+    pollingPaused = true;
+    stopFetching();
+    stopSettingsPolling();
+}
+
+function resumePolling(immediate) {
+    if (navigator.onLine === false) return;
+    pollingPaused = false;
+    if (!state.channelId) {
+        handleLogin();
+        return;
+    }
+    if (immediate) {
+        resetBackoff();
+        startFetching();
+        startSettingsPolling();
+        return;
+    }
+    scheduleNextFetch(nextBackoffMs());
+}
+
+function setupConnectionWatchers() {
+    window.addEventListener('offline', () => {
+        patchState({ online: false, dataSource: 'error' });
+        pausePolling();
+    });
+
+    window.addEventListener('online', () => {
+        patchState({ online: true });
+        resumePolling(true);
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') return;
+        if (navigator.onLine === false) return;
+        pollingPaused = false;
+        if (!state.channelId) {
+            handleLogin();
+            return;
+        }
+        if (!globals.fetchTimeout) startFetching();
+        else fetchChzzkData();
+        if (!globals.settingsPollingTimeout) startSettingsPolling();
+    });
+
+    window.addEventListener('pageshow', () => {
+        if (navigator.onLine === false) return;
+        pollingPaused = false;
+        if (state.channelId && !globals.fetchTimeout) startFetching();
+    });
+
+    document.addEventListener('freeze', pausePolling);
+    document.addEventListener('resume', () => resumePolling(true));
+}
 
 async function handleLogin() {
     try {
-        const response = await fetchUserChannel();
+        const response = await withTimeout(fetchUserChannel(), FETCH_TIMEOUT_MS);
         if (response.ok) {
             const data = await response.json();
             const verifiedChannelId = data?.content?.channelId;
             if (typeof verifiedChannelId === 'string' && /^[a-f0-9]{10,64}$/i.test(verifiedChannelId)) {
+                patchState({
+                    authenticated: true,
+                    channelId: verifiedChannelId,
+                    channelName: safeChannelName(data),
+                    uiError: null
+                });
                 updateAuthUi(true, state);
-                state.channelId = verifiedChannelId;
                 try { localStorage.setItem('chzzkChannelId', verifiedChannelId); } catch (_e) {}
+                resetBackoff();
                 startFetching();
                 loadAndShowSettings().then(() => startSettingsPolling());
             } else {
-                updateUi(state, '채널 정보 없음');
+                patchState({ uiError: '채널 정보 없음' });
             }
         } else if (response.status === 401) {
             updateAuthUi(false, state);
         } else if (response.status === 403) {
-            updateUi(state, '권한 부족 (유저정보)');
-            dom.statusMsg.textContent = '앱 설정에서 유저 정보 조회 권한을 추가해주세요.';
+            patchState({ uiError: '권한 부족 (유저정보)' });
+            setText(dom.statusMsg, '앱 설정에서 유저 정보 조회 권한을 추가해주세요.');
             dom.statusMsg.className = 'error-msg';
         } else {
-            updateUi(state, '연동 에러');
+            patchState({ uiError: '연동 에러' });
         }
     } catch (_error) {
-        updateUi(state, '네트워크 에러');
+        patchState({ uiError: '네트워크 에러', dataSource: 'error' });
+        if (state.channelId) scheduleNextFetch(nextBackoffMs());
     }
 }
 
 async function loadAndShowSettings() {
     try {
-        const response = await fetchLiveSettings();
+        const response = await withTimeout(fetchLiveSettings(), FETCH_TIMEOUT_MS);
         if (response.status === 401) { handleLogout(); return; }
         if (response.ok) {
             const data = await response.json();
@@ -151,9 +253,6 @@ async function loadAndShowSettings() {
     }
 }
 
-/**
- * API 응답의 content를 UI 입력 필드에 적용합니다.
- */
 function applySettingsToUi(content) {
     dom.liveTitleInput.value = content.defaultLiveTitle || '';
     if (content.category) {
@@ -161,23 +260,22 @@ function applySettingsToUi(content) {
         dom.liveCategoryIdInput.value = content.category.categoryId || '';
         dom.categorySearchInput.value = content.category.categoryValue || '';
         if (content.category.categoryValue) {
-            dom.selectedCategoryName.textContent = content.category.categoryValue;
+            setText(dom.selectedCategoryName, content.category.categoryValue);
             dom.selectedCategoryDisplay.classList.remove('is-hidden');
         } else {
+            setText(dom.selectedCategoryName, '');
             dom.selectedCategoryDisplay.classList.add('is-hidden');
         }
     } else {
         dom.categoryTypeSelect.value = content.categoryType || 'GAME';
         dom.liveCategoryIdInput.value = '';
         dom.categorySearchInput.value = '';
+        setText(dom.selectedCategoryName, '');
         dom.selectedCategoryDisplay.classList.add('is-hidden');
     }
     dom.liveTagsInput.value = (content.tags || []).join(', ');
 }
 
-/**
- * API 응답에서 비교용 스냅샷을 추출합니다.
- */
 function extractSettingsSnapshot(content) {
     return {
         title: content.defaultLiveTitle || '',
@@ -188,9 +286,6 @@ function extractSettingsSnapshot(content) {
     };
 }
 
-/**
- * 설정 입력 필드 중 하나라도 포커스(편집 중)인지 확인합니다.
- */
 function isSettingsInputFocused() {
     const active = document.activeElement;
     return (
@@ -201,16 +296,11 @@ function isSettingsInputFocused() {
     );
 }
 
-/**
- * 원격 설정이 변경되었는지 확인하고, 변경 시 UI를 갱신합니다.
- * 사용자가 입력 필드를 편집 중이면 갱신을 건너뜁니다.
- */
 async function pollSettingsIfChanged() {
-    // 편집 중이면 이번 사이클은 건너뜀
-    if (isSettingsInputFocused()) return;
+    if (isSettingsInputFocused() || pollingPaused) return;
 
     try {
-        const response = await fetchLiveSettings();
+        const response = await withTimeout(fetchLiveSettings(), FETCH_TIMEOUT_MS);
         if (response.status === 401) { handleLogout(); return; }
         if (!response.ok) return;
 
@@ -218,18 +308,14 @@ async function pollSettingsIfChanged() {
         if (!data.content) return;
 
         const remote = extractSettingsSnapshot(data.content);
-
-        // 최초 실행이거나 변경이 감지된 경우에만 UI 갱신
         const isFirstSync = !lastKnownSettings;
         if (isFirstSync || !settingsEqual(lastKnownSettings, remote)) {
             applySettingsToUi(data.content);
             lastKnownSettings = remote;
-
-            // 외부 변경 알림 (최초 로드가 아닌 경우에만)
             if (!isFirstSync) {
-                dom.statusMsg.textContent = '외부에서 설정이 변경되어 반영했습니다.';
+                setText(dom.statusMsg, '외부에서 설정이 변경되어 반영했습니다.');
                 dom.statusMsg.className = 'info-msg';
-                setTimeout(() => { dom.statusMsg.textContent = ''; }, 3000);
+                setTimeout(() => { setText(dom.statusMsg, ''); }, 3000);
             }
         }
     } catch (_error) {
@@ -249,8 +335,9 @@ function settingsEqual(a, b) {
 
 async function handleLogout() {
     await logout();
-    stopFetching();
-    stopSettingsPolling();
+    pausePolling();
+    pollingPaused = false;
+    resetBackoff();
     lastKnownSettings = null;
     updateAuthUi(false, state);
 }
@@ -258,8 +345,6 @@ async function handleLogout() {
 function handleAuthSuccess() {
     handleLogin();
 }
-
-// --- Event Listeners ---
 
 dom.loginBtn.addEventListener('click', login);
 dom.logoutBtn.addEventListener('click', handleLogout);
@@ -274,30 +359,32 @@ dom.refreshStatsBtn.addEventListener('click', async () => {
         dom.refreshStatsBtn.classList.remove('refreshing');
     }, 5000);
 });
+
 dom.saveSettingsBtn.addEventListener('click', async () => {
     const title = dom.liveTitleInput.value.trim();
     const categoryType = dom.categoryTypeSelect.value;
     const categoryId = dom.liveCategoryIdInput.value.trim();
     const tagsInput = dom.liveTagsInput.value;
-    const tags = tagsInput ? tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag) : [];
+    const tags = tagsInput ? tagsInput.split(',').map((tag) => tag.trim()).filter((tag) => tag) : [];
 
     const body = { defaultLiveTitle: title, categoryType, tags };
     if (categoryId) body.categoryId = categoryId;
 
     dom.saveSettingsBtn.disabled = true;
-    dom.statusMsg.textContent = '업데이트 중...';
+    setText(dom.statusMsg, '업데이트 중...');
     dom.statusMsg.className = '';
 
     try {
         const response = await updateLiveSettings(body);
         if (response.ok) {
-            // 저장 성공 시 lastKnownSettings를 현재 값으로 갱신 (폴링이 즉시 덮어쓰지 않도록)
             lastKnownSettings = {
-                title, categoryType, categoryId,
+                title,
+                categoryType,
+                categoryId,
                 categoryValue: dom.categorySearchInput.value.trim(),
                 tags: tagsInput
             };
-            dom.statusMsg.textContent = '방송 설정이 업데이트 되었습니다.';
+            setText(dom.statusMsg, '방송 설정이 업데이트 되었습니다.');
             dom.statusMsg.className = 'success-msg';
         } else {
             let errorDetails = '';
@@ -305,19 +392,18 @@ dom.saveSettingsBtn.addEventListener('click', async () => {
                 const errPayload = await response.json();
                 if (errPayload.message) errorDetails = ` (${errPayload.message})`;
             } catch (_e) {}
-            dom.statusMsg.textContent = `업데이트 실패${errorDetails} (권한/입력값 확인)`;
+            setText(dom.statusMsg, `업데이트 실패${errorDetails} (권한/입력값 확인)`);
             dom.statusMsg.className = 'error-msg';
         }
     } catch (_error) {
-        dom.statusMsg.textContent = '오류가 발생했습니다.';
+        setText(dom.statusMsg, '오류가 발생했습니다.');
         dom.statusMsg.className = 'error-msg';
     } finally {
         dom.saveSettingsBtn.disabled = false;
-        setTimeout(() => { dom.statusMsg.textContent = ''; }, 3000);
+        setTimeout(() => { setText(dom.statusMsg, ''); }, 3000);
     }
 });
 
-// --- Category Autocomplete ---
 let searchTimeout = null;
 
 dom.categorySearchInput.addEventListener('input', (e) => {
@@ -325,6 +411,7 @@ dom.categorySearchInput.addEventListener('input', (e) => {
     if (!query) {
         dom.liveCategoryIdInput.value = '';
         dom.selectedCategoryDisplay.classList.add('is-hidden');
+        setText(dom.selectedCategoryName, '');
         dom.categorySearchResults.classList.add('is-hidden');
         return;
     }
@@ -346,8 +433,6 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// --- Legacy domain migration notice ---
-
 const LEGACY_HOSTNAMES = ['chzzk-statistics-dock.pages.dev'];
 const NEW_DOCK_URL = 'https://cheese-stick-dock.pages.dev';
 
@@ -360,17 +445,17 @@ function setupMigrationNotice() {
     const dismissBtn = document.getElementById('migration-dismiss-btn');
     if (!modal) return;
 
-    if (oldHostEl) oldHostEl.textContent = window.location.hostname;
+    setText(oldHostEl, window.location.hostname);
     modal.classList.remove('is-hidden');
 
     copyBtn?.addEventListener('click', async () => {
         try {
             await navigator.clipboard.writeText(NEW_DOCK_URL);
-            copyBtn.textContent = '복사됨!';
-            setTimeout(() => { copyBtn.textContent = '복사'; }, 2000);
+            setText(copyBtn, '복사됨!');
+            setTimeout(() => { setText(copyBtn, '복사'); }, 2000);
         } catch (_e) {
-            copyBtn.textContent = '실패';
-            setTimeout(() => { copyBtn.textContent = '복사'; }, 2000);
+            setText(copyBtn, '실패');
+            setTimeout(() => { setText(copyBtn, '복사'); }, 2000);
         }
     });
 
@@ -379,17 +464,15 @@ function setupMigrationNotice() {
     });
 }
 
-// --- Initialization ---
 function initialize() {
     setupMigrationNotice();
     setupHideValuesFeature(state);
+    setupConnectionWatchers();
 
-    // localStorage의 channelId는 단순 UI 힌트이므로, 형식 검증을 통과한 경우에만 임시 표시용으로 사용합니다.
-    // 실제 통계 호출에 쓰이는 channelId는 /api/users/me 응답으로 받은 값으로 항상 덮어씁니다.
     try {
         const savedId = localStorage.getItem('chzzkChannelId');
         if (savedId && /^[a-f0-9]{10,64}$/i.test(savedId)) {
-            state.channelId = savedId;
+            patchState({ channelId: savedId });
         } else if (savedId) {
             localStorage.removeItem('chzzkChannelId');
         }
@@ -401,10 +484,9 @@ function initialize() {
     handleLogin();
 }
 
-// --- Settings Polling ---
-
 function startSettingsPolling() {
     stopSettingsPolling();
+    if (pollingPaused) return;
 
     globals.settingsPollingTimeout = setInterval(() => {
         pollSettingsIfChanged();
