@@ -13,6 +13,7 @@
 
 - ✏️ **방송 설정 변경**: 방송 제목, 카테고리(자동완성 검색), 태그를 실시간으로 수정 가능
 - 📊 **실시간 통계**: 동시 시청자 수 / 최고 시청자 / 평균 시청자 / 팔로워
+- 📈 **운영자 전용 일일 지표**: `/admin`에서 오늘·30일 DAU/방문/신규·재방문 확인 (본인 치지직 채널만, 공개 UI에 링크 없음)
 - 🔒 **OAuth 2.0 로그인**: 치지직 공식 OAuth 인증 방식 사용
 - 👁️ **수치 가리기**: 각 수치 클릭 시 숨김/표시 전환 (스트리밍 중 화면 보호)
 - ⚡ **최적화된 아키텍처**: KV 캐싱, Jitter 폴링, LocalStorage 폴백 적용
@@ -80,6 +81,7 @@
 | `GET /api/live-status` | 분당 120회 |
 | 위 요청 중 `force=true` | **로그인 필수** + 분당 30회 (캐시 우회·오리진 직접 호출) |
 | `GET /api/categories/search` | **로그인 필수** + 분당 60회 (응답 60초 KV 캐싱) |
+| `GET /api/admin/metrics` | **운영자(ADMIN_CHANNEL_ID)만** + 분당 30회 |
 | `GET /api/users/me`, `/api/lives/setting` | 분당 120회 |
 | `PATCH /api/lives/setting` | 분당 30회 |
 | `POST /api/auth/revoke` | 분당 20회 |
@@ -109,7 +111,8 @@
 5. (권장) Cloudflare WAF에서 `/api/*`에 대한 Rate Limiting Rules 또는 Turnstile 적용으로 KV 카운터의 race condition 한계를 보완.
 6. 배포 후 **OAuth 로그인**(치지직 연동 → 메인 대시보드 전환)/새로고침/로그아웃/설정변경 시나리오 점검.
 7. 이슈 발생 시 세션 KV 키(`session:*`) 삭제 후 재검증, 토큰 폐기는 치지직 개발자 센터에서도 강제 만료 가능.
-8. `console.log`(`[security] ...`) 모니터링 항목: `oauth_state_mismatch`, `csrf_validation_failed*`, `origin_validation_failed_*`, `rate_limit_*`, `*_unauthenticated`, `*_misconfigured`, `session_store_missing`.
+8. `console.log`(`[security] ...`) 모니터링 항목: `oauth_state_mismatch`, `csrf_validation_failed*`, `origin_validation_failed_*`, `rate_limit_*`, `*_unauthenticated`, `*_misconfigured`, `session_store_missing`, `admin_metrics_*`.
+9. 운영자 지표를 쓰려면 `ADMIN_CHANNEL_ID`에 **본인 치지직 채널 ID**를 넣고 재배포한 뒤 `https://your-app.pages.dev/admin`으로 접속합니다. 채널 ID는 치지직 채널 URL의 hex 값이거나, 독 로그인 후 Local Storage의 `chzzkChannelId`입니다.
 
 ### 문제 해결: `Session store is not configured.`
 
@@ -165,7 +168,8 @@ OAuth 로그인·세션 쿠키는 Cloudflare **KV**에 저장됩니다. 바인�
 1. Pages 프로젝트 → **Settings** → **Environment variables** 탭으로 이동합니다.
 2. `CHZZK_CLIENT_ID`와 `CHZZK_CLIENT_SECRET`을 추가합니다.
 3. **`ALLOWED_ORIGIN`을 본인의 배포 도메인으로 명시 설정**합니다(예: `https://your-app.pages.dev`). 보안상 명시적 화이트리스트를 강력 권장하며, 여러 개는 공백으로 구분합니다.
-4. 모든 설정을 마친 후 **재배포(Redeploy)**합니다.
+4. (선택) **`ADMIN_CHANNEL_ID`**에 본인 치지직 채널 ID를 넣으면 `/admin`에서 일일 사용자 지표를 볼 수 있습니다. 미설정 시 해당 페이지는 403입니다. 여러 운영자는 공백으로 구분합니다.
+5. 모든 설정을 마친 후 **재배포(Redeploy)**합니다.
 
 ### 6단계: 치지직 앱 Redirect URI 수정
 [치지직 개발자 센터]에서 Redirect URI를 아래 형식으로 수정합니다.
@@ -178,6 +182,7 @@ OAuth 로그인·세션 쿠키는 Cloudflare **KV**에 저장됩니다. 바인�
 ```
 Cheese-Stick-Dock/
 ├── index.html                  # 메인 페이지 (인라인 스크립트/스타일 없음)
+├── admin/index.html            # 운영자 전용 일일 지표 (공개 UI에 링크 없음)
 ├── style.css                   # 스타일시트 (콜백 페이지 스타일 포함)
 ├── wrangler.toml               # Cloudflare Pages 설정 및 KV 바인딩 안내
 ├── _headers                    # 보안 헤더 설정 (엄격 CSP, HSTS, COOP/CORP 등)
@@ -185,19 +190,29 @@ Cheese-Stick-Dock/
 │   ├── main.js                 # 진입점 (Jitter 폴링 및 상태 관리)
 │   ├── api.js                  # API 통신 (LocalStorage 폴백 & CSRF 헤더 강제)
 │   ├── auth.js                 # OAuth 리다이렉트 로그인 및 oauth_complete 복귀 처리
+│   ├── admin.js                # 운영자 지표 페이지
 │   ├── ui.js                   # UI 갱신·카테고리 자동완성 등 (XSS 안전)
 │   └── state.js                # 전역 상태 (dataSource 및 로컬 상태 정리)
 └── functions/
     ├── _lib/security.js        # 세션/CSRF/Origin/Sec-Fetch/Rate Limit/안전 로깅 헬퍼
+    ├── _lib/metrics.js         # 일일 DAU 집계 (채널 ID 해시만 저장)
     └── api/
         ├── live-status.js      # 라이브 상태 조회 (KV SWR, SSRF 방어, force=세션 필요)
         ├── categories/search.js  # 카테고리 검색 (세션 인증 필수, KV 응답 캐싱)
         ├── lives/setting.js      # 방송 설정 (입력 검증, CSRF + Origin 이중 방어)
-        ├── users/me.js           # 내 채널 정보 (Sec-Fetch-Site 검증)
+        ├── users/me.js           # 내 채널 정보 (Sec-Fetch-Site 검증, DAU 기록)
+        ├── admin/metrics.js      # 운영자 전용 지표 조회
         ├── auth/login.js         # OAuth 로그인 시작 (256bit state)
         ├── auth/callback.js      # OAuth 콜백 (외부 스크립트 + 엄격 CSP)
         └── auth/revoke.js        # 세션/토큰 폐기 (실패 명시 응답)
 ```
+
+### 운영자 일일 지표 (`/admin`)
+
+- 집계 대상은 **치지직 로그인에 성공한 사용자**입니다. 독 페이지를 연 횟수가 오늘 방문, 같은 날 처음 확인된 채널이 DAU입니다.
+- 날짜 경계는 **한국 시간(KST)** 입니다. 일자별 기록은 약 90일 후 KV에서 만료됩니다.
+- 채널 ID는 SHA-256 해시로만 저장하며, 지표 API는 개인 식별 값을 내려주지 않습니다.
+- 메인 화면에는 링크를 두지 않습니다. `ADMIN_CHANNEL_ID`와 로그인한 채널이 일치할 때만 데이터가 보입니다.
 
 ---
 

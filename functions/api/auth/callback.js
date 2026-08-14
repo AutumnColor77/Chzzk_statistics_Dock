@@ -104,8 +104,14 @@ export async function onRequest(context) {
     );
   }
 
-  const headers = new Headers({ Location: '/?oauth_complete=1' });
+  const nextCookie = getCookie('oauth_next', request);
+  const redirectPath = (nextCookie === '/admin' || nextCookie === '/admin/')
+    ? '/admin?oauth_complete=1'
+    : '/?oauth_complete=1';
+
+  const headers = new Headers({ Location: redirectPath });
   appendSetCookie(headers, 'oauth_state=; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=0');
+  appendSetCookie(headers, 'oauth_next=; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=0');
   clearSessionCookies(headers);
   attachSessionCookies(headers, session);
   withNoStore(headers);

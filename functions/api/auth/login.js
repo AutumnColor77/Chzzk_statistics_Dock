@@ -1,4 +1,5 @@
 import {
+  appendSetCookie,
   applyDefaultSecurityHeaders,
   checkRateLimit,
   logSecurityEvent,
@@ -7,6 +8,16 @@ import {
   safePath,
   withNoStore
 } from '../../_lib/security.js';
+
+function resolveOAuthNextPath(request) {
+  try {
+    const next = new URL(request.url).searchParams.get('next');
+    if (next === '/admin' || next === '/admin/') return '/admin';
+  } catch (_e) {
+    // ignore
+  }
+  return '';
+}
 
 export async function onRequest(context) {
   const { env, request } = context;
@@ -38,10 +49,22 @@ export async function onRequest(context) {
   authUrl.searchParams.set('state', state);
 
   const headers = new Headers({ 'Location': authUrl.toString() });
-  headers.set(
-    'Set-Cookie',
+  appendSetCookie(
+    headers,
     `oauth_state=${state}; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=600`
   );
+  const nextPath = resolveOAuthNextPath(request);
+  if (nextPath) {
+    appendSetCookie(
+      headers,
+      `oauth_next=${encodeURIComponent(nextPath)}; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=600`
+    );
+  } else {
+    appendSetCookie(
+      headers,
+      'oauth_next=; HttpOnly; Secure; SameSite=Lax; Path=/api/auth; Max-Age=0'
+    );
+  }
   withNoStore(headers);
   applyDefaultSecurityHeaders(headers);
 

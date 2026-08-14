@@ -153,6 +153,28 @@ export async function deleteSession(env, request) {
   await kv.delete(sessionKey(sessionId));
 }
 
+/**
+ * 세션 KV에 필드를 병합합니다. TTL은 다시 SESSION_TTL_SECONDS로 연장됩니다.
+ * csrfToken 등 보안 필드는 호출 측에서 덮어쓰지 마세요.
+ */
+export async function updateSession(env, sessionId, patch) {
+  const kv = getSessionKv(env);
+  if (!kv || !sessionId || !/^[a-f0-9]{64}$/i.test(sessionId)) return false;
+  if (!patch || typeof patch !== 'object') return false;
+
+  const raw = await kv.get(sessionKey(sessionId));
+  if (!raw) return false;
+
+  try {
+    const data = JSON.parse(raw);
+    const next = { ...data, ...patch, updatedAt: Date.now() };
+    await kv.put(sessionKey(sessionId), JSON.stringify(next), { expirationTtl: SESSION_TTL_SECONDS });
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
 export function attachSessionCookies(headers, session) {
   appendSetCookie(
     headers,

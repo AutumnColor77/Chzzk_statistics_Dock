@@ -8,8 +8,10 @@ import {
   logSecurityEvent,
   requireAllowedMethods,
   safePath,
+  updateSession,
   withNoStore
 } from '../../_lib/security.js';
+import { extractChannelId, recordDailyActiveUser } from '../../_lib/metrics.js';
 
 const ALLOW_METHODS = 'GET, OPTIONS';
 const ALLOW_HEADERS = 'Content-Type, X-CSRF-Token';
@@ -59,6 +61,18 @@ export async function onRequest(context) {
     return jsonResponse({ message: 'Upstream error' }, {
       status: 502, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
     });
+  }
+
+  const channelId = extractChannelId(payload);
+  if (upstream.ok && channelId) {
+    context.waitUntil((async () => {
+      try {
+        await updateSession(env, session.sessionId, { channelId });
+        await recordDailyActiveUser(env, channelId);
+      } catch (_e) {
+        // 지표 기록 실패는 본 응답을 막지 않음
+      }
+    })());
   }
 
   const headers = corsHeaders(request, env, { methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS });
