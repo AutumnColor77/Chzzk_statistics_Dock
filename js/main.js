@@ -51,15 +51,6 @@ function withTimeout(promise, ms) {
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-function safeChannelName(payload) {
-    const content = payload && payload.content;
-    const raw = content && (content.channelName || content.nickname);
-    if (typeof raw !== 'string') return '';
-    const trimmed = raw.trim();
-    if (!trimmed) return '';
-    return trimmed.length > 80 ? trimmed.slice(0, 80) : trimmed;
-}
-
 async function fetchChzzkData(force = false) {
     if (!state.channelId) {
         updateUi(state);
@@ -225,7 +216,6 @@ async function handleLogin() {
                 patchState({
                     authenticated: true,
                     channelId: verifiedChannelId,
-                    channelName: safeChannelName(data),
                     uiError: null
                 });
                 updateAuthUi(true, state);

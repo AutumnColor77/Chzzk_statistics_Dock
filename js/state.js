@@ -6,7 +6,6 @@ export const MAX_HISTORY_LENGTH = 120;
 
 export const state = {
     channelId: null,
-    channelName: '',
     liveStatus: 'CLOSE',
     concurrentViewers: 0,
     peakViewers: 0,

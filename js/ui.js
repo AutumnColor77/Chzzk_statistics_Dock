@@ -13,7 +13,6 @@ export const dom = {
     statusMsg: document.getElementById('settings-status-msg'),
     statusDot: document.querySelector('.status-dot'),
     headerLogo: document.querySelector('.header-logo'),
-    headerChannelName: document.getElementById('header-channel-name'),
     categorySearchInput: document.getElementById('category-search-input'),
     categorySearchResults: document.getElementById('category-search-results'),
     categoryTypeSelect: document.getElementById('live-category-type'),
@@ -31,7 +30,6 @@ const HEADER_LOGO_BY_SOURCE = {
     error: 'icon_red.png'
 };
 
-const DEFAULT_CHANNEL_TITLE = 'Cheese Stick Dock';
 const CATEGORY_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 const STAT_DEPENDENCIES = {
@@ -70,13 +68,6 @@ function formatStatValue(nextState, key) {
 
 export function updateUi(nextState = state, _customErrorMsg, changedKeys) {
     const forceAll = !changedKeys || !changedKeys.length;
-
-    if (forceAll || shouldPaint(changedKeys, ['channelName', 'authenticated'])) {
-        const title = nextState.authenticated && nextState.channelName
-            ? nextState.channelName
-            : DEFAULT_CHANNEL_TITLE;
-        setText(dom.headerChannelName, title);
-    }
 
     dom.statItems.forEach((item) => {
         const valueEl = item.querySelector('.value');
@@ -123,7 +114,7 @@ export function updateAuthUi(hasToken, nextState = state) {
         if (!nextState.authenticated) {
             patchState({ authenticated: true });
         } else {
-            updateUi(nextState, null, ['authenticated', 'channelName']);
+            updateUi(nextState, null, ['authenticated']);
         }
     } else {
         show(dom.authSection);
@@ -131,7 +122,6 @@ export function updateAuthUi(hasToken, nextState = state) {
         patchState({
             authenticated: false,
             channelId: null,
-            channelName: '',
             uiError: 'ID 없음'
         });
     }
