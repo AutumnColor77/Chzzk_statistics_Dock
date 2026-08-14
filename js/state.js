@@ -1,3 +1,7 @@
+export const POLL_INTERVAL_LIVE_MS = 15_000;
+export const POLL_INTERVAL_OFFLINE_MS = 60_000;
+export const POLL_INTERVAL_HIDDEN_MS = 120_000;
+
 export const MAX_HISTORY_LENGTH = 120;
 
 export const state = {
@@ -59,6 +63,20 @@ export function patchState(partial) {
 export function notifyState(changedKeys) {
     const keys = Array.isArray(changedKeys) ? changedKeys.slice() : [];
     emit(keys);
+}
+
+export function isBroadcastLive(liveStatus) {
+    const status = String(liveStatus || '').toUpperCase();
+    return status === 'OPEN' || status === 'LIVE' || status === 'ON_AIR';
+}
+
+/**
+ * 방송 상태·탭 가시성에 따른 라이브 상태 폴링 간격.
+ * hidden이면 120초, 방송 중 15초, 미진행 60초.
+ */
+export function getPollingIntervalMs(liveStatus, visibilityState = 'visible') {
+    if (visibilityState === 'hidden') return POLL_INTERVAL_HIDDEN_MS;
+    return isBroadcastLive(liveStatus) ? POLL_INTERVAL_LIVE_MS : POLL_INTERVAL_OFFLINE_MS;
 }
 
 export function clearLocalSessionState() {

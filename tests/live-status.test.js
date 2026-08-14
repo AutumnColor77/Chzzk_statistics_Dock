@@ -48,8 +48,27 @@ describe('GET /api/live-status', () => {
     expect(body.code).toBe(200);
     expect(body.content.concurrentUserCount).toBe(7);
     expect(JSON.stringify(body)).not.toMatch(/accessToken|refreshToken|ADMIN_SECRET/i);
-    expect(response.headers.get('Cache-Control')).toMatch(/no-store/);
+    expect(response.headers.get('Cache-Control')).toBe(
+      'public, max-age=5, s-maxage=5, stale-while-revalidate=5'
+    );
     expect(response.headers.get('X-Cache')).toBeTruthy();
+  });
+
+  it('does not cache 5xx live-status failures', async () => {
+    const original = globalThis.fetch;
+    restoreFetch = () => {
+      globalThis.fetch = original;
+    };
+    globalThis.fetch = async () => new Response('origin down', { status: 500 });
+
+    const ctx = createContext(
+      apiRequest('/api/live-status?channelId=bbbbbbbbbbbbbbbb'),
+      env
+    );
+    const response = await liveStatus(ctx);
+    await ctx.flush();
+    expect(response.status).toBe(502);
+    expect(response.headers.get('Cache-Control')).toMatch(/no-store/);
   });
 
   it('rejects unauthenticated force refresh', async () => {
@@ -58,5 +77,6 @@ describe('GET /api/live-status', () => {
       env
     ));
     expect(response.status).toBe(401);
+    expect(response.headers.get('Cache-Control')).toMatch(/no-store/);
   });
 });

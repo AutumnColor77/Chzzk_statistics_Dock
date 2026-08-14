@@ -10,7 +10,9 @@ import {
 const FRESH_DURATION_MS = 25 * 1000;
 const STALE_DURATION_MS = 60 * 1000;
 const KV_TTL_SECONDS = 120;
-const EDGE_CACHE_TTL_SECONDS = 15;
+const EDGE_CACHE_TTL_SECONDS = 5;
+const EDGE_CACHE_CONTROL = `public, max-age=${EDGE_CACHE_TTL_SECONDS}, s-maxage=${EDGE_CACHE_TTL_SECONDS}, stale-while-revalidate=${EDGE_CACHE_TTL_SECONDS}`;
+const CDN_CACHE_CONTROL = `public, max-age=${EDGE_CACHE_TTL_SECONDS}, stale-while-revalidate=${EDGE_CACHE_TTL_SECONDS}`;
 const ORIGIN_MAX_RETRIES = 3;
 const ORIGIN_BACKOFF_CAP_MS = 4000;
 
@@ -106,7 +108,8 @@ async function matchEdgeCache(channelId) {
 async function putEdgeCache(channelId, data) {
   const headers = new Headers({
     'Content-Type': 'application/json; charset=UTF-8',
-    'Cache-Control': `public, max-age=${EDGE_CACHE_TTL_SECONDS}`
+    'Cache-Control': EDGE_CACHE_CONTROL,
+    'CDN-Cache-Control': CDN_CACHE_CONTROL
   });
   const response = new Response(JSON.stringify(data), { status: 200, headers });
   try {
@@ -116,10 +119,15 @@ async function putEdgeCache(channelId, data) {
   }
 }
 
-function buildResponseHeaders(request, env, cacheStatus) {
+function buildResponseHeaders(request, env, cacheStatus, { cacheable = false } = {}) {
   const headers = corsHeaders(request, env, { methods: ALLOW_METHODS });
   headers.set('Content-Type', 'application/json; charset=UTF-8');
-  headers.set('Cache-Control', 'no-store');
+  if (cacheable) {
+    headers.set('Cache-Control', EDGE_CACHE_CONTROL);
+    headers.set('CDN-Cache-Control', CDN_CACHE_CONTROL);
+  } else {
+    headers.set('Cache-Control', 'no-store');
+  }
   headers.set('X-Cache', cacheStatus);
   applyDefaultSecurityHeaders(headers);
   return headers;
@@ -134,9 +142,9 @@ function jsonRateLimited(request, env, retryAfter = 60) {
   );
 }
 
-function jsonBody(data, request, env, cacheStatus) {
+function jsonBody(data, request, env, cacheStatus, { cacheable = true } = {}) {
   return new Response(JSON.stringify(data), {
-    headers: buildResponseHeaders(request, env, cacheStatus)
+    headers: buildResponseHeaders(request, env, cacheStatus, { cacheable })
   });
 }
 
@@ -188,7 +196,7 @@ export async function onRequest(context) {
     if (edgeHit) {
       return new Response(edgeHit.body, {
         status: 200,
-        headers: buildResponseHeaders(request, env, 'EDGE')
+        headers: buildResponseHeaders(request, env, 'EDGE', { cacheable: true })
       });
     }
   }
@@ -206,7 +214,7 @@ export async function onRequest(context) {
         })
       );
     }
-    return jsonBody(data, request, env, kvStatus);
+    return jsonBody(data, request, env, kvStatus, { cacheable: !force });
   };
 
   try {

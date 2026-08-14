@@ -1,11 +1,10 @@
-import { state, globals, MAX_HISTORY_LENGTH, patchState } from './state.js';
-import { fetchLiveStatus, fetchUserChannel, fetchLiveSettings, updateLiveSettings, searchCategories } from './api.js';
+import { state, globals, MAX_HISTORY_LENGTH, patchState, getPollingIntervalMs } from './state.js';
+import { fetchLiveStatus, fetchUserChannel, fetchLiveSettings, updateLiveSettings, searchCategories, getLiveStatusRetryDelayMs } from './api.js';
 import { login, logout, handleOAuthReturn } from './auth.js';
 import { dom, updateUi, updateAuthUi, renderCategoryResults, setupHideValuesFeature } from './ui.js';
 import { setText } from './dom-safe.js';
 
-const BASE_INTERVAL_MS = 30000;
-const JITTER_RANGE_MS = 5000;
+const POLL_JITTER_RATIO = 0.08;
 const SETTINGS_POLL_INTERVAL_MS = 45000;
 const FETCH_TIMEOUT_MS = 12000;
 const RECONNECT_BASE_MS = 1000;
@@ -22,8 +21,16 @@ function randomInt(maxExclusive) {
     return buf[0] % maxExclusive;
 }
 
-function getJitteredInterval() {
-    return BASE_INTERVAL_MS + randomInt(JITTER_RANGE_MS * 2 + 1) - JITTER_RANGE_MS;
+function currentVisibilityState() {
+    return typeof document !== 'undefined' && document.visibilityState === 'hidden'
+        ? 'hidden'
+        : 'visible';
+}
+
+function getAdaptiveIntervalMs() {
+    const base = getPollingIntervalMs(state.liveStatus, currentVisibilityState());
+    const span = Math.max(250, Math.round(base * POLL_JITTER_RATIO));
+    return base + randomInt(span * 2 + 1) - span;
 }
 
 function nextBackoffMs() {
@@ -116,14 +123,15 @@ function scheduleNextFetch(delayMs) {
     stopFetching();
     if (pollingPaused || !state.channelId) return;
 
-    const interval = typeof delayMs === 'number' ? delayMs : getJitteredInterval();
+    const interval = typeof delayMs === 'number' ? delayMs : getAdaptiveIntervalMs();
     globals.fetchTimeout = setTimeout(async () => {
         globals.fetchTimeout = null;
         if (pollingPaused || !state.channelId || navigator.onLine === false) return;
         await fetchChzzkData();
         if (pollingPaused || !state.channelId) return;
         if (state.dataSource === 'error') {
-            scheduleNextFetch(nextBackoffMs());
+            const retryMs = Math.max(getLiveStatusRetryDelayMs(), nextBackoffMs());
+            scheduleNextFetch(retryMs);
             return;
         }
         resetBackoff();
@@ -179,15 +187,21 @@ function setupConnectionWatchers() {
     });
 
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState !== 'visible') return;
         if (navigator.onLine === false) return;
         pollingPaused = false;
+
+        if (document.visibilityState === 'hidden') {
+            if (state.channelId) scheduleNextFetch();
+            return;
+        }
+
         if (!state.channelId) {
             handleLogin();
             return;
         }
-        if (!globals.fetchTimeout) startFetching();
-        else fetchChzzkData();
+
+        resetBackoff();
+        startFetching();
         if (!globals.settingsPollingTimeout) startSettingsPolling();
     });
 

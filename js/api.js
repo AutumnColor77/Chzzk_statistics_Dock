@@ -40,16 +40,51 @@ function loadFromLocalCache(channelId) {
     }
 }
 
-/**
- * 라이브 상태를 가져옵니다.
- * 성공 시 LocalStorage에 캐싱하고, 서버 장애 시 로컬 캐시로 폴백합니다.
- */
-export async function fetchLiveStatus(channelId, force = false) {
+const inflightLiveStatus = new Map();
+const LIVE_STATUS_TIMEOUT_MS = 12000;
+const LIVE_STATUS_BACKOFF_BASE_MS = 1000;
+const LIVE_STATUS_BACKOFF_MAX_MS = 30000;
+
+let liveStatusBackoffAttempt = 0;
+let liveStatusBackoffUntil = 0;
+
+export function getLiveStatusRetryDelayMs(now = Date.now()) {
+    return Math.max(0, liveStatusBackoffUntil - now);
+}
+
+export function resetLiveStatusClient() {
+    inflightLiveStatus.clear();
+    liveStatusBackoffAttempt = 0;
+    liveStatusBackoffUntil = 0;
+}
+
+function noteLiveStatusSuccess() {
+    liveStatusBackoffAttempt = 0;
+    liveStatusBackoffUntil = 0;
+}
+
+function noteLiveStatusFailure(now = Date.now()) {
+    liveStatusBackoffAttempt = Math.min(liveStatusBackoffAttempt + 1, 8);
+    const exp = Math.min(
+        LIVE_STATUS_BACKOFF_MAX_MS,
+        LIVE_STATUS_BACKOFF_BASE_MS * (2 ** (liveStatusBackoffAttempt - 1))
+    );
+    liveStatusBackoffUntil = now + exp;
+}
+
+async function requestLiveStatus(channelId, force) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), LIVE_STATUS_TIMEOUT_MS);
     let url = `/api/live-status?channelId=${encodeURIComponent(channelId)}`;
     if (force) url += '&force=true';
 
     try {
-        const response = await fetch(url, { credentials: 'same-origin' });
+        const response = await fetch(url, {
+            credentials: force ? 'same-origin' : 'omit',
+            cache: force ? 'no-store' : 'default',
+            signal: controller.signal,
+            headers: { Accept: 'application/json' }
+        });
 
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -57,17 +92,48 @@ export async function fetchLiveStatus(channelId, force = false) {
 
         const data = await response.json();
         const cacheStatus = response.headers.get('X-Cache') || 'UNKNOWN';
-
         saveToLocalCache(channelId, data);
+        noteLiveStatusSuccess();
         return { data, source: 'server', cacheStatus };
+    } finally {
+        clearTimeout(timer);
+    }
+}
 
-    } catch (error) {
+/**
+ * 라이브 상태를 가져옵니다.
+ * 동일 키의 진행 중 요청은 Promise를 재사용하고, 실패 시 지수 백오프로 연속 재요청을 막습니다.
+ * 성공 시 LocalStorage에 캐싱하고, 서버 장애 시 로컬 캐시로 폴백합니다.
+ */
+export function fetchLiveStatus(channelId, force = false) {
+    const now = Date.now();
+    if (!force && now < liveStatusBackoffUntil) {
         const cachedData = loadFromLocalCache(channelId);
         if (cachedData) {
-            return { data: cachedData, source: 'local-cache', cacheStatus: 'LOCAL' };
+            return Promise.resolve({ data: cachedData, source: 'local-cache', cacheStatus: 'BACKOFF' });
         }
-        throw error;
+        return Promise.reject(new Error('live-status backoff'));
     }
+
+    const key = `${channelId}:${force ? '1' : '0'}`;
+    const pending = inflightLiveStatus.get(key);
+    if (pending) return pending;
+
+    const request = requestLiveStatus(channelId, force)
+        .catch((error) => {
+            noteLiveStatusFailure();
+            const cachedData = loadFromLocalCache(channelId);
+            if (cachedData) {
+                return { data: cachedData, source: 'local-cache', cacheStatus: 'LOCAL' };
+            }
+            throw error;
+        })
+        .finally(() => {
+            inflightLiveStatus.delete(key);
+        });
+
+    inflightLiveStatus.set(key, request);
+    return request;
 }
 
 export async function fetchUserChannel() {
