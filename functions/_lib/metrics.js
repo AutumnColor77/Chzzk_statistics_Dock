@@ -14,12 +14,18 @@ const VISIT_BUCKET_MS = 5 * 60 * 1000; // 5분 버킷 — isolate 간 RMW 충돌
 const KV_READ_CHUNK = 40;
 const CHZZK_USERS_ME = 'https://openapi.chzzk.naver.com/open/v1/users/me';
 
-/** isolate 수명 동안 고정. 요청 스코프 데이터가 아니라 샤드 키용 ID. */
-const ISOLATE_ID = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
-
 /** isolate 로컬 방문 카운터. 같은 버킷 키에 대해 단조성(put-if-greater)을 보장. */
 const visitCounters = new Map();
 const dauSeenInIsolate = new Map();
+
+let isolateId = '';
+
+function getIsolateId() {
+  if (!isolateId) {
+    isolateId = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+  }
+  return isolateId;
+}
 
 function getMetricsKv(env) {
   return env.LIVE_STATUS_CACHE || env.SESSION_STORE || null;
@@ -144,7 +150,7 @@ function summarizeDay(date, raw) {
 
 function visitShardKey(date) {
   const bucket = Math.floor(Date.now() / VISIT_BUCKET_MS);
-  return `${VISIT_KEY_PREFIX}${date}:${bucket}:${ISOLATE_ID}`;
+  return `${VISIT_KEY_PREFIX}${date}:${bucket}:${getIsolateId()}`;
 }
 
 function writeAnalyticsEngine(env, date, hash) {
@@ -172,7 +178,7 @@ async function flushDauHash(kv, date, hash) {
   let firstSeen = await kv.get(seenKey);
   if (!firstSeen) {
     firstSeen = date;
-    const uniqKey = `${UNIQ_KEY_PREFIX}${ISOLATE_ID}`;
+    const uniqKey = `${UNIQ_KEY_PREFIX}${getIsolateId()}`;
     const prevUniq = Number((await kv.get(uniqKey)) || '0');
     await Promise.all([
       kv.put(seenKey, date),
@@ -180,7 +186,7 @@ async function flushDauHash(kv, date, hash) {
     ]);
   }
 
-  const dauKey = `${DAU_KEY_PREFIX}${date}:${ISOLATE_ID}`;
+  const dauKey = `${DAU_KEY_PREFIX}${date}:${getIsolateId()}`;
   const prev = (await kv.get(dauKey, { type: 'json' })) || {};
   const hashes = prev.hashes && typeof prev.hashes === 'object' ? { ...prev.hashes } : {};
   hashes[hash] = firstSeen;
