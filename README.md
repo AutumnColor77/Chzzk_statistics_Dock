@@ -91,9 +91,9 @@
 
 > **주의**: KV 기반 카운터는 race condition과 eventual consistency 한계가 있으므로, 결정적인 차단이 필요한 경우 **Cloudflare WAF Rate Limiting Rules / Turnstile**을 함께 적용하세요. CF-Connecting-IP 헤더가 없는 요청(=Cloudflare 프록시를 거치지 않은 요청)은 보수적으로 차단합니다.
 
-### 후원 링크 (선택)
+### 커뮤니티 링크 (선택)
 
-메인 페이지 하단 푸터에 운영 안내 및 투네이션 링크가 있습니다. Fork 후 자체 배포 시 [`index.html`](index.html)의 `<footer class="site-footer">` 안 `<a href="...">`를 본인 후원 페이지 URL로 바꾸면 됩니다.
+메인 페이지 하단 푸터에 디스코드 커뮤니티 초대 링크가 있습니다. Fork 후 자체 배포 시 [`index.html`](index.html)의 `<footer class="site-footer">` 안 `<a href="...">`를 본인 커뮤니티 URL로 바꾸면 됩니다.
 
 ### 로컬에 남는 정보
 

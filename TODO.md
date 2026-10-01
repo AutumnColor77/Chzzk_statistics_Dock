@@ -16,8 +16,8 @@
   - [x] 공개 API 남용 완화: `GET /api/live-status`, `GET /api/categories/search`에 IP 기준 rate limiting(`checkRateLimit`, 분당 상한은 각 함수 파일 상단 상수).
 
 - [x] **3-1. 운영·UI (선택, 반영됨)**
-  - [x] 메인 페이지 하단 푸터에 운영 안내·투네이션 링크(`index.html`). Fork 시 본인 후원 URL로 `href` 수정.
-  - [x] README에 트래픽 제한·후원 링크 안내 반영(v0.3.2).
+  - [x] 메인 페이지 하단 푸터에 운영 안내·디스코드 커뮤니티 링크(`index.html`). Fork 시 본인 커뮤니티 URL로 `href` 수정.
+  - [x] README에 트래픽 제한·커뮤니티 링크 안내 반영.
 
 - [x] **3-2. OAuth 팝업 로그인 안정화 (v0.4.1)**
   - [x] 인증 성공 시 메인 창에서 팝업 자동 닫기 (`js/auth.js`).
