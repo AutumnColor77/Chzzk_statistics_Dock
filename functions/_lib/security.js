@@ -687,6 +687,7 @@ function getClientIp(request) {
 }
 
 const RATE_MEMORY = new Map();
+const RATE_KV_SAMPLED = new Map();
 const RATE_MEMORY_MAX = 4000;
 const RATE_SUBWINDOW_SECONDS_DEFAULT = 30;
 
@@ -704,6 +705,33 @@ function pruneRateMemory(now) {
   }
 }
 
+function rememberKvSample(key, slot, blocked) {
+  RATE_KV_SAMPLED.set(key, { slot, blocked });
+  if (RATE_KV_SAMPLED.size < RATE_MEMORY_MAX) return;
+  const cutoff = slot - 4;
+  for (const [sampleKey, entry] of RATE_KV_SAMPLED) {
+    if (entry.slot < cutoff) RATE_KV_SAMPLED.delete(sampleKey);
+  }
+  if (RATE_KV_SAMPLED.size < RATE_MEMORY_MAX) return;
+  const overflow = RATE_KV_SAMPLED.size - Math.floor(RATE_MEMORY_MAX / 2);
+  let removed = 0;
+  for (const sampleKey of RATE_KV_SAMPLED.keys()) {
+    RATE_KV_SAMPLED.delete(sampleKey);
+    if (++removed >= overflow) break;
+  }
+}
+
+function rateLimitKeys(now, action, ip, windowSeconds, subwindowSeconds) {
+  const subwindow = Math.max(1, Number(subwindowSeconds) || RATE_SUBWINDOW_SECONDS_DEFAULT);
+  const slot = Math.floor(now / 1000 / subwindow);
+  const slotCount = Math.max(1, Math.ceil(windowSeconds / subwindow));
+  const keys = [];
+  for (let i = 0; i < slotCount; i++) {
+    keys.push(`${RATE_LIMIT_KEY_PREFIX}${action}:${ip}:${slot - i}`);
+  }
+  return { slot, keys };
+}
+
 function consumeMemoryRateLimit(key, windowMs, now) {
   let entry = RATE_MEMORY.get(key);
   if (!entry || now >= entry.resetAt) {
@@ -717,8 +745,10 @@ function consumeMemoryRateLimit(key, windowMs, now) {
 
 /**
  * isolate 인메모리 + KV 서브윈도우 카운터.
- * - 메모리는 동일 isolate 폭주를 즉시 차단합니다.
- * - KV는 10초 슬롯으로 나눠 전역 근사치를 모으며, 단일 키 RMW 레이스를 줄입니다.
+ * - 메모리는 동일 isolate 폭주를 즉시 차단합니다. 상한 초과는 KV 없이 429입니다.
+ * - 기본 KV 경로는 슬롯(기본 30초, 호출부가 subwindowSeconds로 지정 가능)마다 읽고 현재 슬롯에 씁니다.
+ * - options.sparseKv 이면 메모리 카운트가 상한의 절반 미만일 때 KV를 생략합니다.
+ *   절반 이상이면 그 슬롯에서 다른 슬롯을 한 번만 읽고 현재 슬롯에 한 번만 씁니다.
  * - CF-Connecting-IP 가 없으면 보수적으로 차단합니다.
  */
 export async function checkRateLimit(env, request, action, limit, windowSeconds, options = {}) {
@@ -741,12 +771,18 @@ export async function checkRateLimit(env, request, action, limit, windowSeconds,
     return { allowed: true, remaining: Math.max(0, limit - mem.count), retryAfter };
   }
 
-  const subwindow = Math.max(1, Number(options.subwindowSeconds) || RATE_SUBWINDOW_SECONDS_DEFAULT);
-  const slot = Math.floor(now / 1000 / subwindow);
-  const slots = Math.max(1, Math.ceil(windowSeconds / subwindow));
-  const keys = [];
-  for (let i = 0; i < slots; i++) {
-    keys.push(`${RATE_LIMIT_KEY_PREFIX}${action}:${ip}:${slot - i}`);
+  const { slot, keys } = rateLimitKeys(now, action, ip, windowSeconds, options.subwindowSeconds);
+  if (options.sparseKv) {
+    return checkSparseRateLimit(kv, {
+      action,
+      ip,
+      slot,
+      keys,
+      mem,
+      limit,
+      retryAfter,
+      windowSeconds
+    });
   }
 
   const values = await Promise.all(keys.map((key) => kv.get(key)));
@@ -758,6 +794,42 @@ export async function checkRateLimit(env, request, action, limit, windowSeconds,
   const next = (Number(values[0]) || 0) + 1;
   await kv.put(keys[0], String(next), { expirationTtl: windowSeconds + 10 });
   return { allowed: true, remaining: Math.max(0, limit - total - 1), retryAfter };
+}
+
+async function checkSparseRateLimit(kv, { action, ip, slot, keys, mem, limit, retryAfter, windowSeconds }) {
+  const sampleKey = `${action}:${ip}:${slot}`;
+  const sampled = RATE_KV_SAMPLED.get(sampleKey);
+  if (sampled) {
+    if (sampled.blocked) {
+      return { allowed: false, remaining: 0, retryAfter, reason: 'kv' };
+    }
+    return { allowed: true, remaining: Math.max(0, limit - mem.count), retryAfter };
+  }
+
+  if (mem.count < limit / 2) {
+    return { allowed: true, remaining: Math.max(0, limit - mem.count), retryAfter };
+  }
+
+  rememberKvSample(sampleKey, slot, false);
+  try {
+    const otherKeys = keys.slice(1);
+    let others = 0;
+    if (otherKeys.length > 0) {
+      const values = await Promise.all(otherKeys.map((key) => kv.get(key)));
+      others = values.reduce((sum, value) => sum + (Number(value) || 0), 0);
+    }
+    const total = mem.count + others;
+    const blocked = total >= limit;
+    rememberKvSample(sampleKey, slot, blocked);
+    await kv.put(keys[0], String(mem.count), { expirationTtl: windowSeconds + 10 });
+    if (blocked) {
+      return { allowed: false, remaining: 0, retryAfter, reason: 'kv' };
+    }
+    return { allowed: true, remaining: Math.max(0, limit - total), retryAfter };
+  } catch (error) {
+    RATE_KV_SAMPLED.delete(sampleKey);
+    throw error;
+  }
 }
 
 export function rateLimitedTextResponse(retryAfter = 60) {

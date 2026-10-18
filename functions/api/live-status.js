@@ -10,7 +10,7 @@ import {
 const FRESH_DURATION_MS = 25 * 1000;
 const STALE_DURATION_MS = 60 * 1000;
 const KV_TTL_SECONDS = 120;
-const EDGE_CACHE_TTL_SECONDS = 5;
+const EDGE_CACHE_TTL_SECONDS = 15;
 const EDGE_CACHE_CONTROL = `public, max-age=${EDGE_CACHE_TTL_SECONDS}, s-maxage=${EDGE_CACHE_TTL_SECONDS}, stale-while-revalidate=${EDGE_CACHE_TTL_SECONDS}`;
 const CDN_CACHE_CONTROL = `public, max-age=${EDGE_CACHE_TTL_SECONDS}, stale-while-revalidate=${EDGE_CACHE_TTL_SECONDS}`;
 const ORIGIN_MAX_RETRIES = 3;
@@ -148,6 +148,32 @@ function jsonBody(data, request, env, cacheStatus, { cacheable = true } = {}) {
   });
 }
 
+function liveStatusDataSame(left, right) {
+  try {
+    return JSON.stringify(left) === JSON.stringify(right);
+  } catch (_e) {
+    return false;
+  }
+}
+
+async function putLiveStatusCache(kv, cacheKey, data, previous, loaded) {
+  let prev = previous;
+  if (!loaded) {
+    try {
+      prev = await kv.get(cacheKey, { type: 'json' });
+    } catch (_e) {
+      prev = null;
+    }
+  }
+  if (prev && Number.isFinite(prev.timestamp) && liveStatusDataSame(prev.data, data)) {
+    const age = Date.now() - prev.timestamp;
+    if (age >= 0 && age < FRESH_DURATION_MS) return;
+  }
+  await kv.put(cacheKey, JSON.stringify({ data, timestamp: Date.now() }), {
+    expirationTtl: KV_TTL_SECONDS
+  });
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
 
@@ -159,10 +185,12 @@ export async function onRequest(context) {
   const channelId = requestUrl.searchParams.get('channelId');
   const force = requestUrl.searchParams.get('force') === 'true';
 
-  const limit = await checkRateLimit(env, request, 'live_status', RATE_LIMIT_PER_IP_PER_MIN, 60);
-  if (!limit.allowed) {
-    logSecurityEvent('rate_limit_live_status', { path: safePath(request) });
-    return jsonRateLimited(request, env, limit.retryAfter || 60);
+  if (!channelId) {
+    return new Response('channelId query parameter is required', { status: 400 });
+  }
+
+  if (!CHANNEL_ID_PATTERN.test(channelId)) {
+    return new Response('Invalid channelId format', { status: 400 });
   }
 
   if (force) {
@@ -181,17 +209,7 @@ export async function onRequest(context) {
       logSecurityEvent('rate_limit_live_status_force', { path: safePath(request) });
       return jsonRateLimited(request, env, forceLimit.retryAfter || 60);
     }
-  }
-
-  if (!channelId) {
-    return new Response('channelId query parameter is required', { status: 400 });
-  }
-
-  if (!CHANNEL_ID_PATTERN.test(channelId)) {
-    return new Response('Invalid channelId format', { status: 400 });
-  }
-
-  if (!force) {
+  } else {
     const edgeHit = await matchEdgeCache(channelId);
     if (edgeHit) {
       return new Response(edgeHit.body, {
@@ -199,27 +217,34 @@ export async function onRequest(context) {
         headers: buildResponseHeaders(request, env, 'EDGE', { cacheable: true })
       });
     }
+
+    const limit = await checkRateLimit(env, request, 'live_status', RATE_LIMIT_PER_IP_PER_MIN, 60, {
+      sparseKv: true
+    });
+    if (!limit.allowed) {
+      logSecurityEvent('rate_limit_live_status', { path: safePath(request) });
+      return jsonRateLimited(request, env, limit.retryAfter || 60);
+    }
   }
 
   const kv = env.LIVE_STATUS_CACHE;
   const cacheKey = `live-status:${channelId}`;
   const now = Date.now();
 
+  let cached = null;
+  const cacheLoaded = !force && Boolean(kv);
+
   const persist = (data, kvStatus) => {
     context.waitUntil(putEdgeCache(channelId, data));
     if (kv) {
-      context.waitUntil(
-        kv.put(cacheKey, JSON.stringify({ data, timestamp: Date.now() }), {
-          expirationTtl: KV_TTL_SECONDS
-        })
-      );
+      context.waitUntil(putLiveStatusCache(kv, cacheKey, data, cached, cacheLoaded));
     }
     return jsonBody(data, request, env, kvStatus, { cacheable: !force });
   };
 
   try {
     if (!force && kv) {
-      const cached = await kv.get(cacheKey, { type: 'json' });
+      cached = await kv.get(cacheKey, { type: 'json' });
       if (cached && cached.timestamp && cached.data) {
         const age = now - cached.timestamp;
         if (age < FRESH_DURATION_MS) {
@@ -227,7 +252,7 @@ export async function onRequest(context) {
           return jsonBody(cached.data, request, env, 'HIT');
         }
         if (age < STALE_DURATION_MS) {
-          context.waitUntil(refreshCache(kv, cacheKey, channelId));
+          context.waitUntil(refreshCache(kv, cacheKey, channelId, cached));
           return jsonBody(cached.data, request, env, 'STALE');
         }
       }
@@ -270,12 +295,11 @@ export async function onRequestOptions(context) {
   return new Response(null, { headers });
 }
 
-async function refreshCache(kv, cacheKey, channelId) {
+async function refreshCache(kv, cacheKey, channelId, previous) {
   try {
     const freshData = await fetchFromOrigin(channelId);
-    const cacheEntry = { data: freshData, timestamp: Date.now() };
     await Promise.all([
-      kv.put(cacheKey, JSON.stringify(cacheEntry), { expirationTtl: KV_TTL_SECONDS }),
+      putLiveStatusCache(kv, cacheKey, freshData, previous, true),
       putEdgeCache(channelId, freshData)
     ]);
   } catch (_error) {
