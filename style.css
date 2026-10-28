@@ -761,6 +761,13 @@ select.modern-input {
     margin-bottom: 12px;
 }
 
+.admin-chart-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
 .admin-chart-panel h3,
 .admin-table-panel h3 {
     margin: 0 0 12px;

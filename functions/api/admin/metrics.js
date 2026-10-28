@@ -8,9 +8,11 @@ import {
   jsonResponse,
   logSecurityEvent,
   requireAllowedMethods,
-  safePath
+  safePath,
+  withNoStore
 } from '../../_lib/security.js';
 import {
+  EXPORT_DAYS,
   isAdminChannelId,
   isAdminConfigured,
   readDailyMetrics,
@@ -75,10 +77,52 @@ export async function onRequest(context) {
     return forbidden(request, env);
   }
 
-  const metrics = await readDailyMetrics(env, 30);
+  const format = new URL(request.url).searchParams.get('format');
+  if (format && format !== 'csv') {
+    return jsonResponse({ message: 'Unsupported format' }, {
+      status: 400, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+    });
+  }
+
+  const metrics = format === 'csv'
+    ? await readDailyMetrics(env, EXPORT_DAYS)
+    : await readDailyMetrics(env);
+  if (format === 'csv') {
+    return csvResponse(metrics, request, env);
+  }
   return jsonResponse(metrics, {
     status: 200, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
   });
+}
+
+function csvCell(value) {
+  const text = String(value ?? '');
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+function metricsToCsv(metrics) {
+  const days = Array.isArray(metrics.days) ? metrics.days.slice().reverse() : [];
+  const lines = ['날짜,DAU,방문,신규,재방문'];
+  for (const day of days) {
+    lines.push([
+      csvCell(day.date),
+      Number(day.dau) || 0,
+      Number(day.visits) || 0,
+      Number(day.newUsers) || 0,
+      Number(day.returningUsers) || 0
+    ].join(','));
+  }
+  return `\uFEFF${lines.join('\r\n')}\r\n`;
+}
+
+function csvResponse(metrics, request, env) {
+  const headers = corsHeaders(request, env, { methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS });
+  headers.set('Content-Type', 'text/csv; charset=UTF-8');
+  headers.set('Content-Disposition', 'attachment; filename="cheese-stick-metrics.csv"');
+  withNoStore(headers);
+  applyDefaultSecurityHeaders(headers);
+  return new Response(metricsToCsv(metrics), { status: 200, headers });
 }
 
 export async function onRequestOptions(context) {

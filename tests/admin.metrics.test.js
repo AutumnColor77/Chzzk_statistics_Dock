@@ -65,6 +65,28 @@ describe('GET /api/admin/metrics', () => {
     expect(JSON.stringify(body)).not.toMatch(TEST_CHANNEL_ID);
   });
 
+  it('downloads 90 days of aggregates as csv without channel ids', async () => {
+    const session = await createSession(env, {
+      accessToken: 'ci-placeholder-access',
+      channelId: TEST_CHANNEL_ID
+    });
+    await recordDailyActiveUser(env, TEST_CHANNEL_ID);
+
+    const response = await adminMetrics(createContext(
+      apiRequest('/api/admin/metrics?format=csv', {
+        headers: { Cookie: `chzzk_session=${session.sessionId}` }
+      }),
+      env
+    ));
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toMatch(/text\/csv/);
+    const text = await response.text();
+    const rows = text.replace(/^\uFEFF/, '').trim().split(/\r?\n/);
+    expect(rows[0]).toBe('날짜,DAU,방문,신규,재방문');
+    expect(rows).toHaveLength(91);
+    expect(text).not.toMatch(TEST_CHANNEL_ID);
+  });
+
   it('allows a browser session with HMAC proof and no admin header', async () => {
     const session = await createSession(env, {
       accessToken: 'ci-placeholder-access',
