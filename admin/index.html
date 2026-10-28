@@ -75,9 +75,7 @@
                 <div class="admin-chart-head">
                     <h3>최근 30일 DAU</h3>
                     <div class="admin-chart-actions">
-                        <button type="button" id="admin-download-btn" class="refresh-btn admin-refresh-btn" title="최근 90일 집계 CSV">
-                            <span>CSV</span>
-                        </button>
+                        <a id="admin-download-btn" class="refresh-btn admin-refresh-btn" href="/api/admin/metrics?format=csv" download="cheese-stick-metrics.csv" title="최근 90일 집계 CSV">CSV</a>
                         <button type="button" id="admin-refresh-btn" class="refresh-btn admin-refresh-btn" title="새로고침">
                         <svg class="refresh-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="23 4 23 10 17 10"></polyline>

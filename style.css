@@ -785,6 +785,7 @@ select.modern-input {
     width: auto;
     padding: 6px 10px;
     flex-shrink: 0;
+    text-decoration: none;
 }
 
 .metrics-chart {

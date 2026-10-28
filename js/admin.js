@@ -12,7 +12,6 @@ const ui = {
     loginBtn: document.getElementById('admin-login-btn'),
     reloginBtn: document.getElementById('admin-relogin-btn'),
     refreshBtn: document.getElementById('admin-refresh-btn'),
-    downloadBtn: document.getElementById('admin-download-btn'),
     dau: document.getElementById('metric-dau'),
     visits: document.getElementById('metric-visits'),
     newUsers: document.getElementById('metric-new'),
@@ -184,30 +183,6 @@ function startAdminLogin() {
 
 ui.loginBtn?.addEventListener('click', startAdminLogin);
 ui.reloginBtn?.addEventListener('click', startAdminLogin);
-
-ui.downloadBtn?.addEventListener('click', async () => {
-    if (!ui.downloadBtn || ui.downloadBtn.disabled) return;
-    ui.downloadBtn.disabled = true;
-    try {
-        const response = await fetch('/api/admin/metrics?format=csv', { credentials: 'same-origin' });
-        if (response.status === 401) {
-            showPanel('auth');
-            return;
-        }
-        if (!response.ok) return;
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'cheese-stick-metrics.csv';
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(url);
-    } finally {
-        ui.downloadBtn.disabled = false;
-    }
-});
 
 ui.refreshBtn?.addEventListener('click', async () => {
     if (!ui.refreshBtn || ui.refreshBtn.disabled) return;
