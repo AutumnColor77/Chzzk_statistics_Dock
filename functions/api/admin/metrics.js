@@ -12,7 +12,8 @@ import {
   withNoStore
 } from '../../_lib/security.js';
 import {
-  EXPORT_DAYS,
+  CSV_CHUNK_DAYS,
+  csvPartCount,
   isAdminChannelId,
   isAdminConfigured,
   readDailyMetrics,
@@ -22,6 +23,9 @@ import {
 const ALLOW_METHODS = 'GET, OPTIONS';
 const ALLOW_HEADERS = 'Content-Type, X-CSRF-Token, X-Admin-Secret';
 const FORBIDDEN_BODY = { message: 'Forbidden' };
+const CSV_EXPORT_PREFIX = 'metrics:csv:';
+const CSV_EXPORT_TTL_SECONDS = 600;
+const CSV_HEADER = '날짜,DAU,방문,신규,재방문';
 
 function forbidden(request, env) {
   return jsonResponse(FORBIDDEN_BODY, {
@@ -78,19 +82,91 @@ export async function onRequest(context) {
   }
 
   const format = new URL(request.url).searchParams.get('format');
-  if (format && format !== 'csv') {
+  if (format === 'csv') {
+    return csvExport(request, env, session.sessionId);
+  }
+  if (format) {
     return jsonResponse({ message: 'Unsupported format' }, {
       status: 400, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
     });
   }
 
-  const metrics = format === 'csv'
-    ? await readDailyMetrics(env, EXPORT_DAYS)
-    : await readDailyMetrics(env);
-  if (format === 'csv') {
-    return csvResponse(metrics, request, env);
-  }
+  const metrics = await readDailyMetrics(env);
   return jsonResponse(metrics, {
+    status: 200, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+  });
+}
+
+function metricsKv(env) {
+  return env.LIVE_STATUS_CACHE || env.SESSION_STORE || null;
+}
+
+function exportKey(sessionId) {
+  return `${CSV_EXPORT_PREFIX}${sessionId}`;
+}
+
+function csvLines(metrics) {
+  const days = Array.isArray(metrics.days) ? metrics.days.slice().reverse() : [];
+  return days.map((day) => [
+    csvCell(day.date),
+    Number(day.dau) || 0,
+    Number(day.visits) || 0,
+    Number(day.newUsers) || 0,
+    Number(day.returningUsers) || 0
+  ].join(','));
+}
+
+async function csvExport(request, env, sessionId) {
+  const kv = metricsKv(env);
+  if (!kv) {
+    return jsonResponse({ message: 'Metrics store is not configured' }, {
+      status: 503, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+    });
+  }
+
+  const partRaw = new URL(request.url).searchParams.get('part');
+  const key = exportKey(sessionId);
+  if (partRaw === 'file') {
+    const state = await kv.get(key, { type: 'json' });
+    if (!state || state.next !== csvPartCount() || typeof state.csv !== 'string') {
+      return jsonResponse({ message: 'Export is not ready' }, {
+        status: 409, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+      });
+    }
+    return csvFileResponse(state.csv, request, env);
+  }
+
+  const parts = csvPartCount();
+  const part = Number(partRaw);
+  if (!Number.isInteger(part) || String(part) !== partRaw || part < 0 || part >= parts) {
+    return jsonResponse({ message: 'Missing part' }, {
+      status: 400, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+    });
+  }
+
+  const previous = part === 0 ? null : await kv.get(key, { type: 'json' });
+  if (part > 0 && (!previous || previous.next !== part || typeof previous.csv !== 'string')) {
+    return jsonResponse({ message: 'Export is not ready' }, {
+      status: 409, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+    });
+  }
+
+  const offset = (parts - 1 - part) * CSV_CHUNK_DAYS;
+  let metrics;
+  try {
+    metrics = await readDailyMetrics(env, CSV_CHUNK_DAYS, offset, { includeUnique: false });
+  } catch (_e) {
+    return jsonResponse({ message: 'Metrics read failed' }, {
+      status: 503, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
+    });
+  }
+
+  const lines = csvLines(metrics).join('\r\n');
+  const csv = part === 0
+    ? `${CSV_HEADER}\r\n${lines}\r\n`
+    : `${previous.csv}${lines}\r\n`;
+  await kv.put(key, JSON.stringify({ next: part + 1, csv }), { expirationTtl: CSV_EXPORT_TTL_SECONDS });
+  return jsonResponse({ part, parts }, {
     status: 200, request, env, methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS
   });
 }
@@ -101,28 +177,13 @@ function csvCell(value) {
   return text;
 }
 
-function metricsToCsv(metrics) {
-  const days = Array.isArray(metrics.days) ? metrics.days.slice().reverse() : [];
-  const lines = ['날짜,DAU,방문,신규,재방문'];
-  for (const day of days) {
-    lines.push([
-      csvCell(day.date),
-      Number(day.dau) || 0,
-      Number(day.visits) || 0,
-      Number(day.newUsers) || 0,
-      Number(day.returningUsers) || 0
-    ].join(','));
-  }
-  return `\uFEFF${lines.join('\r\n')}\r\n`;
-}
-
-function csvResponse(metrics, request, env) {
+function csvFileResponse(csv, request, env) {
   const headers = corsHeaders(request, env, { methods: ALLOW_METHODS, allowHeaders: ALLOW_HEADERS });
   headers.set('Content-Type', 'text/csv; charset=UTF-8');
   headers.set('Content-Disposition', 'attachment; filename="cheese-stick-metrics.csv"');
   withNoStore(headers);
   applyDefaultSecurityHeaders(headers);
-  return new Response(metricsToCsv(metrics), { status: 200, headers });
+  return new Response(`\uFEFF${csv}`, { status: 200, headers });
 }
 
 export async function onRequestOptions(context) {

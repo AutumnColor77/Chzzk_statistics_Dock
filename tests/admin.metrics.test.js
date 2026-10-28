@@ -71,20 +71,40 @@ describe('GET /api/admin/metrics', () => {
       channelId: TEST_CHANNEL_ID
     });
     await recordDailyActiveUser(env, TEST_CHANNEL_ID);
+    const headers = { Cookie: `chzzk_session=${session.sessionId}` };
 
-    const response = await adminMetrics(createContext(
-      apiRequest('/api/admin/metrics?format=csv', {
-        headers: { Cookie: `chzzk_session=${session.sessionId}` }
-      }),
+    const missing = await adminMetrics(createContext(
+      apiRequest('/api/admin/metrics?format=csv', { headers }),
       env
     ));
-    expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toMatch(/text\/csv/);
-    const text = await response.text();
+    expect(missing.status).toBe(400);
+
+    let parts = 0;
+    for (let part = 0; part < 20; part++) {
+      const response = await adminMetrics(createContext(
+        apiRequest(`/api/admin/metrics?format=csv&part=${part}`, { headers }),
+        env
+      ));
+      expect(response.status).toBe(200);
+      const body = await jsonOf(response);
+      parts = body.parts;
+      if (part + 1 >= parts) break;
+    }
+    expect(parts).toBe(9);
+
+    const file = await adminMetrics(createContext(
+      apiRequest('/api/admin/metrics?format=csv&part=file', { headers }),
+      env
+    ));
+    expect(file.status).toBe(200);
+    expect(file.headers.get('content-type')).toMatch(/text\/csv/);
+    const text = await file.text();
     const rows = text.replace(/^\uFEFF/, '').trim().split(/\r?\n/);
     expect(rows[0]).toBe('날짜,DAU,방문,신규,재방문');
     expect(rows).toHaveLength(91);
     expect(text).not.toMatch(TEST_CHANNEL_ID);
+    const dates = rows.slice(1).map((row) => row.split(',')[0]);
+    expect(dates[0] < dates[dates.length - 1]).toBe(true);
   });
 
   it('allows a browser session with HMAC proof and no admin header', async () => {

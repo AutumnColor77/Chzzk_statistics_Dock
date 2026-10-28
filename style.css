@@ -768,6 +768,13 @@ select.modern-input {
     flex-shrink: 0;
 }
 
+.admin-download-status {
+    min-height: 1.2em;
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
 .admin-chart-panel h3,
 .admin-table-panel h3 {
     margin: 0 0 12px;

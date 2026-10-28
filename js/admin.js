@@ -12,6 +12,8 @@ const ui = {
     loginBtn: document.getElementById('admin-login-btn'),
     reloginBtn: document.getElementById('admin-relogin-btn'),
     refreshBtn: document.getElementById('admin-refresh-btn'),
+    downloadBtn: document.getElementById('admin-download-btn'),
+    downloadStatus: document.getElementById('admin-download-status'),
     dau: document.getElementById('metric-dau'),
     visits: document.getElementById('metric-visits'),
     newUsers: document.getElementById('metric-new'),
@@ -183,6 +185,46 @@ function startAdminLogin() {
 
 ui.loginBtn?.addEventListener('click', startAdminLogin);
 ui.reloginBtn?.addEventListener('click', startAdminLogin);
+
+ui.downloadBtn?.addEventListener('click', async () => {
+    if (!ui.downloadBtn || ui.downloadBtn.disabled) return;
+    ui.downloadBtn.disabled = true;
+    setText(ui.downloadStatus, '90일 집계를 모으는 중입니다.');
+    try {
+        const first = await fetch('/api/admin/metrics?format=csv&part=0', { credentials: 'same-origin' });
+        if (first.status === 401) {
+            showPanel('auth');
+            return;
+        }
+        if (!first.ok) {
+            setText(ui.downloadStatus, '받지 못했습니다. 잠시 후 다시 시도해 주세요.');
+            return;
+        }
+        const started = await first.json();
+        const parts = Number(started.parts) || 0;
+        for (let part = 1; part < parts; part++) {
+            const response = await fetch(`/api/admin/metrics?format=csv&part=${part}`, { credentials: 'same-origin' });
+            if (response.status === 401) {
+                showPanel('auth');
+                return;
+            }
+            if (!response.ok) {
+                setText(ui.downloadStatus, '받지 못했습니다. 잠시 후 다시 시도해 주세요.');
+                return;
+            }
+        }
+        setText(ui.downloadStatus, '');
+        const link = document.createElement('a');
+        link.href = '/api/admin/metrics?format=csv&part=file';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    } catch (_e) {
+        setText(ui.downloadStatus, '받지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+        ui.downloadBtn.disabled = false;
+    }
+});
 
 ui.refreshBtn?.addEventListener('click', async () => {
     if (!ui.refreshBtn || ui.refreshBtn.disabled) return;

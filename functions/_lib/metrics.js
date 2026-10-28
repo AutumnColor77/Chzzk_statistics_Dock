@@ -12,6 +12,11 @@ const RETENTION_DAYS = 90;
 const DAY_TTL_SECONDS = RETENTION_DAYS * 24 * 60 * 60;
 const HISTORY_DAYS = 30;
 export const EXPORT_DAYS = RETENTION_DAYS;
+export const CSV_CHUNK_DAYS = 10;
+
+export function csvPartCount() {
+  return Math.ceil(EXPORT_DAYS / CSV_CHUNK_DAYS);
+}
 const VISIT_BUCKET_MS = 5 * 60 * 1000; // 5분 버킷 — isolate 간 RMW 충돌 구간을 좁힘
 const KV_READ_CHUNK = 40;
 const CHZZK_USERS_ME = 'https://openapi.chzzk.naver.com/open/v1/users/me';
@@ -44,11 +49,12 @@ export function kstDateString(ms = Date.now()) {
   return new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
 }
 
-export function listKstDates(days = HISTORY_DAYS) {
+export function listKstDates(days = HISTORY_DAYS, offset = 0) {
   const today = kstDateString();
   const [year, month, day] = today.split('-').map(Number);
   const dates = [];
-  for (let i = 0; i < days; i++) {
+  const start = Math.max(0, offset);
+  for (let i = start; i < start + days; i++) {
     const dt = new Date(Date.UTC(year, month - 1, day - i));
     const yyyy = dt.getUTCFullYear();
     const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
@@ -303,9 +309,10 @@ function mergeDayFromShards(date, oldDay, visitValues, dauRows) {
   return { date, dau, visits, newUsers, returningUsers };
 }
 
-export async function readDailyMetrics(env, days = HISTORY_DAYS) {
+export async function readDailyMetrics(env, days = HISTORY_DAYS, offset = 0, options = {}) {
   const kv = getMetricsKv(env);
-  const dates = listKstDates(days);
+  const dates = listKstDates(days, offset);
+  const includeUnique = options.includeUnique !== false;
   if (!kv) {
     return {
       timezone: 'Asia/Seoul',
@@ -315,9 +322,7 @@ export async function readDailyMetrics(env, days = HISTORY_DAYS) {
     };
   }
 
-  const [uniqKeys, ...dayPacks] = await Promise.all([
-    listKeyNames(kv, UNIQ_KEY_PREFIX),
-    ...dates.map(async (date) => {
+  const dayLoaders = dates.map(async (date) => {
       const [visitKeys, dauKeys, oldDay] = await Promise.all([
         listKeyNames(kv, `${VISIT_KEY_PREFIX}${date}:`),
         listKeyNames(kv, `${DAU_KEY_PREFIX}${date}:`),
@@ -328,7 +333,21 @@ export async function readDailyMetrics(env, days = HISTORY_DAYS) {
         getMany(kv, dauKeys, 'json')
       ]);
       return mergeDayFromShards(date, oldDay, visitValues, dauRows);
-    })
+    });
+
+  if (!includeUnique) {
+    const daysOnly = await Promise.all(dayLoaders);
+    return {
+      timezone: 'Asia/Seoul',
+      today: daysOnly[0] || summarizeDay(dates[0], emptyDay(dates[0])),
+      totals: { uniqueUsers: 0 },
+      days: daysOnly
+    };
+  }
+
+  const [uniqKeys, ...dayPacks] = await Promise.all([
+    listKeyNames(kv, UNIQ_KEY_PREFIX),
+    ...dayLoaders
   ]);
 
   const history = dayPacks;
